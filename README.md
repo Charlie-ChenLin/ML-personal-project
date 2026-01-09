@@ -30,6 +30,13 @@ python scripts/build_q1_dataset.py --target-metric mean --output outputs/dataset
 python scripts/build_q1_dataset.py --target-metric mean --include-futures --output outputs/datasets/q1_with_futures.csv
 ```
 
+可选：开启额外特征工程（滚动统计/动量/价差/比值等）：
+
+```bash
+python scripts/build_q1_dataset.py --target-metric mean --engineer-features --output outputs/datasets/q1_long_engineered.csv
+python scripts/build_q1_dataset.py --target-metric mean --include-futures --engineer-features --output outputs/datasets/q1_with_futures_engineered.csv
+```
+
 ### 2) 训练/评估（时间序列连续窗口测试）
 
 默认测试窗口：`2021-01` ~ `2021-07`（可用参数修改）。
@@ -45,6 +52,16 @@ python scripts/run_q1_models.py --dataset outputs/datasets/q1_with_futures.csv -
 - `q1_test_predictions.csv`：逐月预测（含 `return_pred`、`strength_pred`）
 - `q1_strength_model_metrics.csv`：强度多分类模型指标
 - `q1_strength_test_predictions.csv`：强度多分类逐月预测与各档概率（`proba__*`）
+
+### 2.5) 描述统计与可视化（原始数据 + 整理后数据）
+
+一键生成原始 Excel 概览、月度特征覆盖、以及建模数据集的时间序列 EDA 图表与统计表：
+
+```bash
+python scripts/run_q1_eda.py
+```
+
+输出写入 `outputs/eda/`；实现细节与建议写法见：`特征工程与描述性统计分析.md`。
 
 ### 3) 问题3：分阶段关键因子自动筛选与权重
 

@@ -13,6 +13,7 @@ from .aggregation import (
     monthly_aggregate_min_max_avg,
     monthly_aggregate_single_value,
 )
+from .feature_engineering import FeatureEngineeringConfig, add_engineered_features
 
 
 TargetMetric = Literal["mean", "last"]
@@ -22,6 +23,7 @@ TargetMetric = Literal["mean", "last"]
 class Q1Dataset:
     target_metric: TargetMetric
     include_futures: bool
+    engineer_features: bool
     strong_threshold: float
     flat_threshold: float
     data: pd.DataFrame
@@ -86,8 +88,10 @@ def build_q1_dataset(
     data_dir: Path,
     target_metric: TargetMetric = "mean",
     include_futures: bool = False,
+    engineer_features: bool = False,
     strong_threshold: float = 0.05,
     flat_threshold: float = 0.005,
+    fe_config: FeatureEngineeringConfig | None = None,
 ) -> Q1Dataset:
     if target_metric not in ("mean", "last"):
         raise ValueError("target_metric must be one of: mean/last")
@@ -145,9 +149,13 @@ def build_q1_dataset(
     out = out.reset_index(names="month")
     out["month"] = out["month"].astype(str)  # e.g. 2021-07
 
+    if engineer_features:
+        out = add_engineered_features(out, config=fe_config)
+
     return Q1Dataset(
         target_metric=target_metric,
         include_futures=include_futures,
+        engineer_features=engineer_features,
         strong_threshold=strong_threshold,
         flat_threshold=flat_threshold,
         data=out,

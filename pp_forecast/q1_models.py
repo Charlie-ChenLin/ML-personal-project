@@ -94,6 +94,7 @@ def _numeric_features(df: pd.DataFrame) -> list[str]:
         "y_direction",
         "y_return",
         "y_strength",
+        "cfg_engineer_features",
         "cfg_strong_threshold",
         "cfg_flat_threshold",
     }
@@ -199,6 +200,9 @@ def fit_predict_regression(
     model: Any,
 ) -> ModelResult:
     features = _numeric_features(df_train)
+    features = [c for c in features if df_train[c].notna().any()]
+    if not features:
+        raise ValueError("no usable numeric features (all NaN in train)")
 
     X_train = df_train[features]
     y_train = df_train["y"].to_numpy()
@@ -252,6 +256,9 @@ def fit_predict_strength(
     model: Any,
 ) -> ClassifierResult:
     features = _numeric_features(df_train)
+    features = [c for c in features if df_train[c].notna().any()]
+    if not features:
+        raise ValueError("no usable numeric features (all NaN in train)")
 
     X_train = df_train[features]
     y_train = df_train["y_strength"].astype(str).to_numpy()

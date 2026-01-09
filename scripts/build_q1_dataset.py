@@ -17,6 +17,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--target-metric", choices=["mean", "last"], default="mean")
     p.add_argument("--include-futures", action="store_true", help="Include file 13 futures factor.")
     p.add_argument(
+        "--engineer-features",
+        action="store_true",
+        help="Add extra engineered features (rolling stats, momentum, spreads, ratios).",
+    )
+    p.add_argument(
         "--strong-threshold",
         type=float,
         default=0.05,
@@ -38,6 +43,7 @@ def main() -> None:
         data_dir=args.data_dir,
         target_metric=args.target_metric,
         include_futures=args.include_futures,
+        engineer_features=args.engineer_features,
         strong_threshold=args.strong_threshold,
         flat_threshold=args.flat_threshold,
     )
@@ -48,6 +54,7 @@ def main() -> None:
     print(f"  rows={len(ds.data)}, cols={len(ds.data.columns)}")
     print(
         f"  target_metric={ds.target_metric}, include_futures={ds.include_futures}, "
+        f"engineer_features={ds.engineer_features}, "
         f"strong_threshold={ds.strong_threshold}, flat_threshold={ds.flat_threshold}"
     )
 
