@@ -46,6 +46,22 @@ python scripts/run_q1_models.py --dataset outputs/datasets/q1_with_futures.csv -
 - `q1_strength_model_metrics.csv`：强度多分类模型指标
 - `q1_strength_test_predictions.csv`：强度多分类逐月预测与各档概率（`proba__*`）
 
+### 3) 问题3：分阶段关键因子自动筛选与权重
+
+基于 PP 月度价格的“趋势/波动”特征做阶段划分，并在每个阶段内用线性模型（Ridge）自动筛选关键因子组（按 `因子名__聚合口径` 的前缀分组），输出各阶段的因子影响权重。
+
+```bash
+python scripts/run_q3_stage_factor_selection.py --dataset outputs/datasets/q1_long.csv
+python scripts/run_q3_stage_factor_selection.py --dataset outputs/datasets/q1_with_futures.csv --also-strength
+```
+
+输出会写入 `outputs/q3/<dataset_stem>/`：
+
+- `q3_stage_summary.csv`：阶段起止、累计涨跌、波动等汇总
+- `q3_stage_assignments.csv`：逐月阶段标签（便于画图/对齐）
+- `q3_ridge_group_weights.csv`：各阶段因子组权重（绝对系数归一化）
+- `q3_ridge_top_features.csv`：各阶段 Top 因子组内的代表性特征（Top-N）
+
 ## 绘图权限提示（如果你在本机/沙盒里遇到 Matplotlib 报错）
 
 如果出现“默认路径不可写”的提示，建议在运行前设置：

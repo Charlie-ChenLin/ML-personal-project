@@ -105,6 +105,7 @@ def main() -> None:
         raise SystemExit("empty train set (check --test-start and dataset coverage)")
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    failures: list[dict[str, str]] = []
 
     # Baselines based on y itself
     y_series = df.set_index("month")["y"]
@@ -161,7 +162,19 @@ def main() -> None:
     )
 
     for model_name, model in models.items():
-        res = fit_predict_regression(df_train, df_test, model_name=model_name, model=model)
+        try:
+            res = fit_predict_regression(df_train, df_test, model_name=model_name, model=model)
+        except Exception as e:
+            failures.append(
+                {
+                    "task": "price_regression",
+                    "model": model_name,
+                    "error_type": type(e).__name__,
+                    "error": str(e),
+                }
+            )
+            continue
+
         dir_pred = (res.y_pred - y_prev > 0).astype(int)
         ret_pred = (res.y_pred - y_prev) / y_prev
 
@@ -207,10 +220,16 @@ def main() -> None:
             pd.DataFrame(pred_payload)
         )
 
-        with open(output_dir / f"q1_params_{model_name}.json", "w", encoding="utf-8") as f:
-            json.dump(res.params, f, ensure_ascii=False, indent=2)
+        try:
+            with open(output_dir / f"q1_params_{model_name}.json", "w", encoding="utf-8") as f:
+                json.dump(res.params, f, ensure_ascii=False, indent=2)
+        except Exception:
+            # writing params is non-critical for the main metrics outputs
+            pass
 
-    metrics_df = pd.DataFrame(model_rows).sort_values("RMSE")
+    metrics_df = pd.DataFrame(model_rows)
+    if not metrics_df.empty and "RMSE" in metrics_df.columns:
+        metrics_df = metrics_df.sort_values("RMSE")
     metrics_df.to_csv(output_dir / "q1_model_metrics.csv", index=False)
 
     if baselines:
@@ -228,7 +247,19 @@ def main() -> None:
         strength_pred_rows = []
 
         for model_name, model in strength_models.items():
-            res = fit_predict_strength(df_train, df_test, model_name=model_name, model=model)
+            try:
+                res = fit_predict_strength(df_train, df_test, model_name=model_name, model=model)
+            except Exception as e:
+                failures.append(
+                    {
+                        "task": "strength_classification",
+                        "model": model_name,
+                        "error_type": type(e).__name__,
+                        "error": str(e),
+                    }
+                )
+                continue
+
             strength_rows.append({"model": model_name, **res.metrics})
 
             proba_cols = [f"proba__{c}" for c in res.classes]
@@ -248,19 +279,30 @@ def main() -> None:
             ) as f:
                 json.dump(res.params, f, ensure_ascii=False, indent=2)
 
-        strength_metrics_df = pd.DataFrame(strength_rows).sort_values(
-            "Strength_F1_macro", ascending=False
-        )
+        strength_metrics_df = pd.DataFrame(strength_rows)
+        if not strength_metrics_df.empty and "Strength_F1_macro" in strength_metrics_df.columns:
+            strength_metrics_df = strength_metrics_df.sort_values(
+                "Strength_F1_macro", ascending=False
+            )
         strength_metrics_df.to_csv(output_dir / "q1_strength_model_metrics.csv", index=False)
 
         if strength_pred_rows:
             strength_preds = pd.concat(strength_pred_rows, axis=0, ignore_index=True)
             strength_preds.to_csv(output_dir / "q1_strength_test_predictions.csv", index=False)
 
+    if failures:
+        with open(output_dir / "q1_failures.json", "w", encoding="utf-8") as f:
+            json.dump(failures, f, ensure_ascii=False, indent=2)
+
     print("[OK] wrote metrics to:", output_dir)
-    print(metrics_df.to_string(index=False))
+    if not metrics_df.empty:
+        print(metrics_df.to_string(index=False))
+    else:
+        print("(no successful regression models)")
     if baselines:
         print("\\nBaselines:", json.dumps(baselines, ensure_ascii=False))
+    if failures:
+        print("\\nFailures:", json.dumps(failures, ensure_ascii=False))
 
 
 if __name__ == "__main__":

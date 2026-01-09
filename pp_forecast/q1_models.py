@@ -7,13 +7,24 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import (
+    AdaBoostClassifier,
+    AdaBoostRegressor,
+    ExtraTreesClassifier,
+    ExtraTreesRegressor,
     GradientBoostingClassifier,
     GradientBoostingRegressor,
     RandomForestClassifier,
     RandomForestRegressor,
 )
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression, Ridge
+from sklearn.linear_model import (
+    BayesianRidge,
+    ElasticNet,
+    HuberRegressor,
+    Lasso,
+    LogisticRegression,
+    Ridge,
+)
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -22,8 +33,11 @@ from sklearn.metrics import (
     recall_score,
     root_mean_squared_error,
 )
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC, SVR
 
 
 def mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -47,6 +61,7 @@ def direction_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float
         "Precision": float(precision_score(y_true, y_pred, zero_division=0)),
         "Recall": float(recall_score(y_true, y_pred, zero_division=0)),
     }
+
 
 def strength_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
     return {
@@ -89,9 +104,29 @@ def build_models(random_state: int = 42) -> dict[str, Any]:
     models: dict[str, Any] = {}
 
     models["ridge"] = Ridge(alpha=1.0, random_state=random_state)
+    models["lasso"] = Lasso(alpha=0.001, random_state=random_state, max_iter=20000)
+    models["elasticnet"] = ElasticNet(
+        alpha=0.001,
+        l1_ratio=0.5,
+        random_state=random_state,
+        max_iter=20000,
+    )
+    models["bayes_ridge"] = BayesianRidge()
+    models["huber"] = HuberRegressor(max_iter=2000, epsilon=1.35, alpha=0.0001)
+
+    models["knn"] = KNeighborsRegressor(n_neighbors=8, weights="distance")
+    models["svr_rbf"] = SVR(C=10.0, gamma="scale", epsilon=0.1)
+
     models["rf"] = RandomForestRegressor(
         n_estimators=500,
         max_depth=6,
+        min_samples_leaf=2,
+        random_state=random_state,
+        n_jobs=1,
+    )
+    models["extra_trees"] = ExtraTreesRegressor(
+        n_estimators=1000,
+        max_depth=8,
         min_samples_leaf=2,
         random_state=random_state,
         n_jobs=1,
@@ -102,6 +137,11 @@ def build_models(random_state: int = 42) -> dict[str, Any]:
         learning_rate=0.05,
         n_estimators=500,
         max_depth=3,
+    )
+    models["ada"] = AdaBoostRegressor(
+        n_estimators=500,
+        learning_rate=0.05,
+        random_state=random_state,
     )
 
     return models
@@ -114,9 +154,24 @@ def build_strength_models(random_state: int = 42) -> dict[str, Any]:
         max_iter=2000,
         random_state=random_state,
     )
+    models["knn_clf"] = KNeighborsClassifier(n_neighbors=10, weights="distance")
+    models["nb"] = GaussianNB()
+    models["svc_rbf"] = SVC(
+        C=5.0,
+        gamma="scale",
+        probability=True,
+        random_state=random_state,
+    )
     models["rf_clf"] = RandomForestClassifier(
         n_estimators=500,
         max_depth=6,
+        min_samples_leaf=2,
+        random_state=random_state,
+        n_jobs=1,
+    )
+    models["extra_trees_clf"] = ExtraTreesClassifier(
+        n_estimators=1000,
+        max_depth=8,
         min_samples_leaf=2,
         random_state=random_state,
         n_jobs=1,
@@ -126,6 +181,11 @@ def build_strength_models(random_state: int = 42) -> dict[str, Any]:
         learning_rate=0.05,
         n_estimators=500,
         max_depth=3,
+    )
+    models["ada_clf"] = AdaBoostClassifier(
+        n_estimators=500,
+        learning_rate=0.05,
+        random_state=random_state,
     )
 
     return models
