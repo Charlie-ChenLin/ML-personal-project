@@ -6,11 +6,17 @@ from typing import Any, Literal
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
+from sklearn.ensemble import (
+    GradientBoostingClassifier,
+    GradientBoostingRegressor,
+    RandomForestClassifier,
+    RandomForestRegressor,
+)
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.metrics import (
     accuracy_score,
+    f1_score,
     mean_absolute_error,
     precision_score,
     recall_score,
@@ -42,6 +48,20 @@ def direction_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float
         "Recall": float(recall_score(y_true, y_pred, zero_division=0)),
     }
 
+def strength_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
+    return {
+        "Strength_Accuracy": float(accuracy_score(y_true, y_pred)),
+        "Strength_Precision_macro": float(
+            precision_score(y_true, y_pred, average="macro", zero_division=0)
+        ),
+        "Strength_Recall_macro": float(
+            recall_score(y_true, y_pred, average="macro", zero_division=0)
+        ),
+        "Strength_F1_macro": float(
+            f1_score(y_true, y_pred, average="macro", zero_division=0)
+        ),
+    }
+
 
 @dataclass(frozen=True)
 class ModelResult:
@@ -52,7 +72,16 @@ class ModelResult:
 
 
 def _numeric_features(df: pd.DataFrame) -> list[str]:
-    exclude = {"month", "y", "y_prev", "y_direction"}
+    exclude = {
+        "month",
+        "y",
+        "y_prev",
+        "y_direction",
+        "y_return",
+        "y_strength",
+        "cfg_strong_threshold",
+        "cfg_flat_threshold",
+    }
     return [c for c in df.columns if c not in exclude]
 
 
@@ -69,6 +98,30 @@ def build_models(random_state: int = 42) -> dict[str, Any]:
     )
 
     models["gbr"] = GradientBoostingRegressor(
+        random_state=random_state,
+        learning_rate=0.05,
+        n_estimators=500,
+        max_depth=3,
+    )
+
+    return models
+
+
+def build_strength_models(random_state: int = 42) -> dict[str, Any]:
+    models: dict[str, Any] = {}
+
+    models["logreg"] = LogisticRegression(
+        max_iter=2000,
+        random_state=random_state,
+    )
+    models["rf_clf"] = RandomForestClassifier(
+        n_estimators=500,
+        max_depth=6,
+        min_samples_leaf=2,
+        random_state=random_state,
+        n_jobs=1,
+    )
+    models["gbr_clf"] = GradientBoostingClassifier(
         random_state=random_state,
         learning_rate=0.05,
         n_estimators=500,
@@ -117,6 +170,67 @@ def fit_predict_regression(
         name=model_name,
         y_pred=y_pred,
         metrics=regression_metrics(df_test["y"].to_numpy(), y_pred),
+        params=getattr(model, "get_params", lambda: {})(),
+    )
+
+
+@dataclass(frozen=True)
+class ClassifierResult:
+    name: str
+    y_pred: np.ndarray
+    y_proba: np.ndarray
+    classes: list[str]
+    metrics: dict[str, float]
+    params: dict[str, Any]
+
+
+def fit_predict_strength(
+    df_train: pd.DataFrame,
+    df_test: pd.DataFrame,
+    *,
+    model_name: str,
+    model: Any,
+) -> ClassifierResult:
+    features = _numeric_features(df_train)
+
+    X_train = df_train[features]
+    y_train = df_train["y_strength"].astype(str).to_numpy()
+    X_test = df_test[features]
+    y_true = df_test["y_strength"].astype(str).to_numpy()
+
+    pre = ColumnTransformer(
+        transformers=[
+            (
+                "num",
+                Pipeline(
+                    steps=[
+                        ("imputer", SimpleImputer(strategy="median", add_indicator=True)),
+                        ("scaler", StandardScaler()),
+                    ]
+                ),
+                features,
+            )
+        ],
+        remainder="drop",
+        verbose_feature_names_out=False,
+    )
+
+    pipe = Pipeline(steps=[("pre", pre), ("model", model)])
+    pipe.fit(X_train, y_train)
+    y_pred = pipe.predict(X_test)
+
+    model_step = pipe.named_steps["model"]
+    if not hasattr(model_step, "predict_proba"):
+        raise TypeError(f"{model_name} does not support predict_proba")
+    y_proba = pipe.predict_proba(X_test)
+    classes = [str(c) for c in getattr(model_step, "classes_", [])]
+
+    return ClassifierResult(
+        name=model_name,
+        y_pred=y_pred,
+        y_proba=y_proba,
+        classes=classes,
+        metrics=strength_metrics(y_true, y_pred),
         params=getattr(model, "get_params", lambda: {})(),
     )
 

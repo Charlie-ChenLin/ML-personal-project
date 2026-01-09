@@ -16,6 +16,18 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--data-dir", type=Path, default=Path("PP数据"))
     p.add_argument("--target-metric", choices=["mean", "last"], default="mean")
     p.add_argument("--include-futures", action="store_true", help="Include file 13 futures factor.")
+    p.add_argument(
+        "--strong-threshold",
+        type=float,
+        default=0.05,
+        help="Return threshold for big up/down (e.g. 0.05 means 5%).",
+    )
+    p.add_argument(
+        "--flat-threshold",
+        type=float,
+        default=0.005,
+        help="Return threshold treated as flat/no-change (e.g. 0.005 means ±0.5%).",
+    )
     p.add_argument("--output", type=Path, default=Path("outputs/datasets/q1_dataset.csv"))
     return p.parse_args()
 
@@ -26,13 +38,18 @@ def main() -> None:
         data_dir=args.data_dir,
         target_metric=args.target_metric,
         include_futures=args.include_futures,
+        strong_threshold=args.strong_threshold,
+        flat_threshold=args.flat_threshold,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     ds.data.to_csv(args.output, index=False)
     print(f"[OK] wrote dataset: {args.output}")
     print(f"  rows={len(ds.data)}, cols={len(ds.data.columns)}")
-    print(f"  target_metric={ds.target_metric}, include_futures={ds.include_futures}")
+    print(
+        f"  target_metric={ds.target_metric}, include_futures={ds.include_futures}, "
+        f"strong_threshold={ds.strong_threshold}, flat_threshold={ds.flat_threshold}"
+    )
 
 
 if __name__ == "__main__":

@@ -22,6 +22,8 @@ TargetMetric = Literal["mean", "last"]
 class Q1Dataset:
     target_metric: TargetMetric
     include_futures: bool
+    strong_threshold: float
+    flat_threshold: float
     data: pd.DataFrame
 
 
@@ -44,6 +46,29 @@ FILE_SPECS: list[tuple[str, str]] = [
     ("GDP", "16-年度GDP.xlsx"),
 ]
 
+StrengthLabel = Literal["big_up", "small_up", "flat", "small_down", "big_down"]
+
+
+def strength_label(
+    ret: float, *, strong_threshold: float, flat_threshold: float
+) -> StrengthLabel:
+    if strong_threshold <= 0:
+        raise ValueError("strong_threshold must be > 0")
+    if flat_threshold < 0:
+        raise ValueError("flat_threshold must be >= 0")
+    if flat_threshold >= strong_threshold:
+        raise ValueError("flat_threshold must be < strong_threshold")
+
+    if ret <= -strong_threshold:
+        return "big_down"
+    if ret < -flat_threshold:
+        return "small_down"
+    if abs(ret) <= flat_threshold:
+        return "flat"
+    if ret < strong_threshold:
+        return "small_up"
+    return "big_up"
+
 
 def _agg_one_source(df: pd.DataFrame) -> pd.DataFrame:
     date_col = detect_date_col(df)
@@ -61,6 +86,8 @@ def build_q1_dataset(
     data_dir: Path,
     target_metric: TargetMetric = "mean",
     include_futures: bool = False,
+    strong_threshold: float = 0.05,
+    flat_threshold: float = 0.005,
 ) -> Q1Dataset:
     if target_metric not in ("mean", "last"):
         raise ValueError("target_metric must be one of: mean/last")
@@ -90,19 +117,38 @@ def build_q1_dataset(
     target = feature_table[price_col].rename("y")
     y_prev = target.shift(1).rename("y_prev")
     y_direction = ((target - y_prev) > 0).astype("Int64").rename("y_direction")
+    y_return = ((target - y_prev) / y_prev).rename("y_return")
+    y_strength = (
+        y_return.map(
+            lambda r: strength_label(
+                float(r),
+                strong_threshold=strong_threshold,
+                flat_threshold=flat_threshold,
+            )
+        )
+        .astype("string")
+        .rename("y_strength")
+    )
 
     # X(t) uses info up to t-1 to predict y(t)
     X = feature_table.shift(1)
 
-    out = pd.concat([X, target, y_prev, y_direction], axis=1)
+    out = pd.concat([X, target, y_prev, y_direction, y_return, y_strength], axis=1)
     out = out.dropna(subset=["y", "y_prev"])  # first month cannot be predicted
 
     # calendar features (for seasonality/trend)
     out["cal_year"] = out.index.year
     out["cal_month"] = out.index.month
+    out["cfg_strong_threshold"] = strong_threshold
+    out["cfg_flat_threshold"] = flat_threshold
 
     out = out.reset_index(names="month")
     out["month"] = out["month"].astype(str)  # e.g. 2021-07
 
-    return Q1Dataset(target_metric=target_metric, include_futures=include_futures, data=out)
-
+    return Q1Dataset(
+        target_metric=target_metric,
+        include_futures=include_futures,
+        strong_threshold=strong_threshold,
+        flat_threshold=flat_threshold,
+        data=out,
+    )

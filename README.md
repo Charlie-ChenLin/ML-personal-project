@@ -7,7 +7,8 @@
 ### 我们已确定的关键口径（重要）
 
 - **预测目标**：预测下月（t+1），在数据集中每一行代表“被预测的月份 t”
-- **涨跌定义**：`(y_t - y_{t-1}) > 0` 为涨，否则为跌（用于评估/输出方向）
+- **涨跌方向（问题1）**：`(y_t - y_{t-1}) > 0` 为涨，否则为跌（用于评估/输出方向）
+- **涨跌强度（问题2）**：按涨跌幅分档（默认：`|r|<=0.5%` 记为`flat`，`|r|>=5%` 记为`big_*`；其余为`small_*`），并输出各档概率
 - **降频聚合（周/日 → 月）**：
   - 若原表含 `最低/最高/平均`：
     - `mean` = 月内 `平均` 的均值
@@ -38,7 +39,12 @@ python scripts/run_q1_models.py --dataset outputs/datasets/q1_long.csv
 python scripts/run_q1_models.py --dataset outputs/datasets/q1_with_futures.csv --futures-mode restrict
 ```
 
-输出会写入 `outputs/metrics/<dataset_stem>/`（指标表、逐月预测等）。
+输出会写入 `outputs/metrics/<dataset_stem>/`：
+
+- `q1_model_metrics.csv`：价格回归 + 方向（并附带由回归派生的“强度分档”指标）
+- `q1_test_predictions.csv`：逐月预测（含 `return_pred`、`strength_pred`）
+- `q1_strength_model_metrics.csv`：强度多分类模型指标
+- `q1_strength_test_predictions.csv`：强度多分类逐月预测与各档概率（`proba__*`）
 
 ## 绘图权限提示（如果你在本机/沙盒里遇到 Matplotlib 报错）
 

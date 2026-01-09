@@ -12,12 +12,16 @@ sys.path.insert(0, str(REPO_ROOT))
 import numpy as np
 import pandas as pd
 
+from pp_forecast.q1_dataset import strength_label
 from pp_forecast.q1_models import (
     build_models,
+    build_strength_models,
     direction_metrics,
+    fit_predict_strength,
     fit_predict_regression,
     predict_baseline,
     regression_metrics,
+    strength_metrics,
 )
 
 
@@ -38,6 +42,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Default: outputs/metrics/<dataset_stem>/",
     )
+    p.add_argument(
+        "--strong-threshold",
+        type=float,
+        default=None,
+        help="Override strong threshold (e.g. 0.05 means 5%). Default: read from dataset if available.",
+    )
+    p.add_argument(
+        "--flat-threshold",
+        type=float,
+        default=None,
+        help="Override flat threshold (e.g. 0.005 means ±0.5%). Default: read from dataset if available.",
+    )
     return p.parse_args()
 
 
@@ -52,6 +68,22 @@ def main() -> None:
     df = pd.read_csv(args.dataset)
     df["month"] = _to_period(df["month"])
     df = df.sort_values("month").reset_index(drop=True)
+
+    strong_threshold = args.strong_threshold
+    if strong_threshold is None and "cfg_strong_threshold" in df.columns:
+        vals = df["cfg_strong_threshold"].dropna().unique().tolist()
+        if vals:
+            strong_threshold = float(vals[0])
+    if strong_threshold is None:
+        strong_threshold = 0.05
+
+    flat_threshold = args.flat_threshold
+    if flat_threshold is None and "cfg_flat_threshold" in df.columns:
+        vals = df["cfg_flat_threshold"].dropna().unique().tolist()
+        if vals:
+            flat_threshold = float(vals[0])
+    if flat_threshold is None:
+        flat_threshold = 0.005
 
     futures_cols = [c for c in df.columns if c.startswith("期货价格__")]
     if futures_cols and args.futures_mode == "restrict":
@@ -89,9 +121,26 @@ def main() -> None:
         y_pred = pred_test[ok]
         dir_true = (y_true - y_prev > 0).astype(int)
         dir_pred = (y_pred - y_prev > 0).astype(int)
+        ret_pred = (y_pred - y_prev) / y_prev
+        if "y_strength" in df_test.columns:
+            strength_true = df_test.loc[ok, "y_strength"].astype(str).to_numpy()
+            strength_pred = np.array(
+                [
+                    strength_label(
+                        float(r),
+                        strong_threshold=strong_threshold,
+                        flat_threshold=flat_threshold,
+                    )
+                    for r in ret_pred
+                ]
+            )
+            strength_part = strength_metrics(strength_true, strength_pred)
+        else:
+            strength_part = {}
         baselines[name] = {
             **regression_metrics(y_true, y_pred),
             **direction_metrics(dir_true, dir_pred),
+            **strength_part,
         }
 
     # ML models
@@ -99,31 +148,63 @@ def main() -> None:
     model_rows = []
     pred_rows = []
 
+    y_true = df_test["y"].to_numpy()
+    y_prev = df_test["y_prev"].to_numpy()
+    dir_true = (y_true - y_prev > 0).astype(int)
+    ret_true = (
+        df_test["y_return"].to_numpy()
+        if "y_return" in df_test.columns
+        else (y_true - y_prev) / y_prev
+    )
+    strength_true = (
+        df_test["y_strength"].astype(str).to_numpy() if "y_strength" in df_test.columns else None
+    )
+
     for model_name, model in models.items():
         res = fit_predict_regression(df_train, df_test, model_name=model_name, model=model)
-        y_true = df_test["y"].to_numpy()
-        y_prev = df_test["y_prev"].to_numpy()
-        dir_true = (y_true - y_prev > 0).astype(int)
         dir_pred = (res.y_pred - y_prev > 0).astype(int)
+        ret_pred = (res.y_pred - y_prev) / y_prev
+
+        if strength_true is not None:
+            strength_pred = np.array(
+                [
+                    strength_label(
+                        float(r),
+                        strong_threshold=strong_threshold,
+                        flat_threshold=flat_threshold,
+                    )
+                    for r in ret_pred
+                ]
+            )
+            strength_part = strength_metrics(strength_true, strength_pred)
+        else:
+            strength_pred = None
+            strength_part = {}
 
         row = {
             "model": model_name,
             **res.metrics,
             **direction_metrics(dir_true, dir_pred),
+            **strength_part,
         }
         model_rows.append(row)
 
+        pred_payload = {
+            "month": df_test["month"].astype(str),
+            "model": model_name,
+            "y_true": y_true,
+            "y_pred": res.y_pred,
+            "direction_true": dir_true,
+            "direction_pred": dir_pred,
+            "return_true": ret_true,
+            "return_pred": ret_pred,
+        }
+        if strength_true is not None and strength_pred is not None:
+            pred_payload["strength_true"] = strength_true
+            pred_payload["strength_pred"] = strength_pred
+
         pred_rows.append(
-            pd.DataFrame(
-                {
-                    "month": df_test["month"].astype(str),
-                    "model": model_name,
-                    "y_true": y_true,
-                    "y_pred": res.y_pred,
-                    "direction_true": dir_true,
-                    "direction_pred": dir_pred,
-                }
-            )
+            pd.DataFrame(pred_payload)
         )
 
         with open(output_dir / f"q1_params_{model_name}.json", "w", encoding="utf-8") as f:
@@ -139,6 +220,42 @@ def main() -> None:
     if pred_rows:
         preds = pd.concat(pred_rows, axis=0, ignore_index=True)
         preds.to_csv(output_dir / "q1_test_predictions.csv", index=False)
+
+    # Strength classification models (输出“涨跌幅度区间”的概率)
+    if strength_true is not None:
+        strength_models = build_strength_models()
+        strength_rows = []
+        strength_pred_rows = []
+
+        for model_name, model in strength_models.items():
+            res = fit_predict_strength(df_train, df_test, model_name=model_name, model=model)
+            strength_rows.append({"model": model_name, **res.metrics})
+
+            proba_cols = [f"proba__{c}" for c in res.classes]
+            proba_df = pd.DataFrame(res.y_proba, columns=proba_cols)
+            pred_df = pd.DataFrame(
+                {
+                    "month": df_test["month"].astype(str),
+                    "model": model_name,
+                    "strength_true": strength_true,
+                    "strength_pred": res.y_pred,
+                }
+            )
+            strength_pred_rows.append(pd.concat([pred_df, proba_df], axis=1))
+
+            with open(
+                output_dir / f"q1_strength_params_{model_name}.json", "w", encoding="utf-8"
+            ) as f:
+                json.dump(res.params, f, ensure_ascii=False, indent=2)
+
+        strength_metrics_df = pd.DataFrame(strength_rows).sort_values(
+            "Strength_F1_macro", ascending=False
+        )
+        strength_metrics_df.to_csv(output_dir / "q1_strength_model_metrics.csv", index=False)
+
+        if strength_pred_rows:
+            strength_preds = pd.concat(strength_pred_rows, axis=0, ignore_index=True)
+            strength_preds.to_csv(output_dir / "q1_strength_test_predictions.csv", index=False)
 
     print("[OK] wrote metrics to:", output_dir)
     print(metrics_df.to_string(index=False))
