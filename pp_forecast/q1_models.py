@@ -9,6 +9,8 @@ from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import (
     AdaBoostClassifier,
     AdaBoostRegressor,
+    BaggingClassifier,
+    BaggingRegressor,
     ExtraTreesClassifier,
     ExtraTreesRegressor,
     GradientBoostingClassifier,
@@ -38,6 +40,7 @@ from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC, SVR
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 
 def mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -144,6 +147,13 @@ def build_models(random_state: int = 42) -> dict[str, Any]:
         learning_rate=0.05,
         random_state=random_state,
     )
+    models["bagging_tree"] = BaggingRegressor(
+        estimator=DecisionTreeRegressor(max_depth=4, random_state=random_state),
+        n_estimators=300,
+        bootstrap=True,
+        random_state=random_state,
+        n_jobs=1,
+    )
 
     return models
 
@@ -187,6 +197,13 @@ def build_strength_models(random_state: int = 42) -> dict[str, Any]:
         n_estimators=500,
         learning_rate=0.05,
         random_state=random_state,
+    )
+    models["bagging_tree_clf"] = BaggingClassifier(
+        estimator=DecisionTreeClassifier(max_depth=4, random_state=random_state),
+        n_estimators=300,
+        bootstrap=True,
+        random_state=random_state,
+        n_jobs=1,
     )
 
     return models

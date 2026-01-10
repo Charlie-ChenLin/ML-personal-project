@@ -94,9 +94,21 @@
 
 - 线性：Ridge / Lasso / ElasticNet / BayesianRidge / HuberRegressor
 - 树模型：RandomForestRegressor / ExtraTreesRegressor / GradientBoostingRegressor / AdaBoostRegressor
+- Bagging：BaggingRegressor(DecisionTree)
 - 距离/核方法：KNNRegressor / SVR(RBF)
+- 时间序列模型（可选依赖）：SARIMAX（statsmodels）/ Prophet（prophet）
 
 每个模型的参数会写到：`outputs/metrics/<dataset_stem>/q1_params_<model>.json`（用于报告“参数设置情况”）。
+
+另外会生成若干集成模型（写报告时可视作“集成学习方案”对比）：
+
+- `ensemble_mean`：简单平均
+- `ensemble_median`：中位数（更稳健）
+- `ensemble_trimmed_mean`：截尾均值（剔除极端模型）
+- `ensemble_cv_weighted`：按训练集 TimeSeriesSplit 的 RMSE 反比加权
+- `ensemble_topk_*`：只用训练集 CV 最优的 Top-k 模型做均值/加权
+
+对应训练集 CV 结果：`outputs/metrics/<dataset_stem>/q1_model_cv.csv`。
 
 ### 4.3 可选：额外特征工程（提升表达能力）
 
