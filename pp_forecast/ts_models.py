@@ -7,7 +7,7 @@ import pandas as pd
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 
-from .q1_models import ModelResult, _numeric_features, regression_metrics
+from .models import ModelResult, _numeric_features, regression_metrics
 
 
 def _select_topk_features(

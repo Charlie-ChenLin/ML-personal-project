@@ -1,0 +1,742 @@
+\documentclass[UTF8,a4paper,11pt,fontset=fandol]{ctexart}
+
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{setspace}
+\usepackage{longtable}
+\usepackage{adjustbox}
+\usepackage{ltcaption}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  citecolor=blue
+}
+
+\setstretch{1.2}
+\setlist[itemize]{itemsep=0.2em,topsep=0.2em}
+\setlength{\textfloatsep}{0.6em}
+\setlength{\floatsep}{0.6em}
+\setlength{\intextsep}{0.6em}
+
+\lstdefinestyle{code}{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+  stringstyle=\color{teal},
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{black!20},
+  showstringspaces=false
+}
+
+% Table helpers: keep booktabs style, fit to \textwidth, and support multi-page tables.
+% - Use TableFit inside a normal table float.
+% - Use LongTableFit for long tables (no scaling box, so page breaks work).
+\newenvironment{TableFit}{\begin{adjustbox}{width=\textwidth,center}}{\end{adjustbox}}
+\newenvironment{LongTableFit}[1]{\setlength{\LTleft}{0pt}\setlength{\LTright}{0pt}\begin{longtable}{#1}}{\end{longtable}}
+
+\newcommand{\StudentName}{姓名}
+\newcommand{\StudentID}{学号}
+\newcommand{\ProjectTitle}{PP价格月度预测}
+
+\title{\ProjectTitle\\\large 2025-2026学年《数据挖掘与机器学习》课程个人 Big Project}
+\author{\StudentName\quad(\StudentID)}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{center}
+（请将\texttt{\textbackslash StudentName}与\texttt{\textbackslash StudentID}替换为真实姓名与学号；最终提交 PDF 文件名按作业要求重命名）
+\end{center}
+
+\tableofcontents
+\clearpage
+
+\section{问题背景与任务定义}
+
+\textbf{聚丙烯（PP）}是典型的大宗化工品，价格既受上游原料与能源成本（丙烯、乙烯、煤/甲醇等路线）驱动，也受供给端（产量、进口、检修）与需求端（下游开工率）影响，并通过库存与期货预期反映行业周期。企业在日常经营中需要对未来 1 个月的 PP 价格水平、涨跌方向与波动强弱做出判断，以辅助采购、排产、库存与风险对冲决策。\par
+
+本项目使用企业提供的 \texttt{PP数据/}（表0--16）作为原始数据源：目标为华东市场 PP 粒现货价格（表1），特征覆盖成本、供需、库存、期货与宏观等多维指标（表2--16）。由于各表频率（日/周/月/年）与起止时间差异显著，我们需要先完成统一月度化与时序对齐，再开展建模与评估。\par
+
+根据题目要求，本报告依次解决：
+\begin{itemize}
+  \item \textbf{问题1：}月度预测 PP 价格，并输出未来涨跌方向（涨/跌）。
+  \item \textbf{问题2：}预测涨跌强度（五分类示例：大涨/小涨/平/小跌/大跌），并输出涨跌幅度的数值预测与概率（\texttt{predict\_proba}）。
+  \item \textbf{问题3：}考虑行业周期分阶段，设计自动筛选关键因子组合的方法，并给出各阶段因子影响权重。
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{三问任务定义、输出形式与评价指标概览}
+\label{tab:task-def}
+\small
+\begin{TableFit}
+\begin{tabular}{p{0.12\linewidth}p{0.54\linewidth}p{0.28\linewidth}}
+\toprule
+任务 & 输出/目标 & 主要指标 \\
+\midrule
+问题1 & 回归：预测下一月价格 $y_t$；分类：输出方向 $\mathbb{I}(y_t-y_{t-1}>0)$ & MAE/RMSE/MAPE；Acc/Precision/Recall \\
+问题2 & 强度五分类：\texttt{y\_strength}，并输出各档概率（\texttt{predict\_proba}）；同时保留回归派生的数值涨跌幅预测 & Accuracy、macro-Precision/Recall/F1；概率分布输出 \\
+问题3 & 阶段划分 + 阶段内关键因子组筛选，输出各阶段因子组权重（可解释） & 阶段摘要表；Top-K 因子组及权重 \\
+\bottomrule
+\end{tabular}
+\end{TableFit}
+\end{table}
+
+\paragraph{符号约定与预测口径（避免信息泄露）}
+以月度为单位，记目标月价格为 $y_t$，特征为 $\mathbf{x}_t$。实际预测场景中，企业在 $t$ 月决策时只能观测到截至 $t-1$ 月的信息（尤其进口、检修等存在公布滞后），因此本项目统一采用
+\[
+ \mathbf{x}_{t-1}\rightarrow y_t
+\]
+即对所有特征做 \texttt{shift(1)}，用上一月信息预测下一月价格（预测步长 $t+1$）。后文所有 EDA 的“覆盖/可用性”统计亦以此建模口径为准。\par
+
+\section{数据说明与预处理}
+
+\subsection{原始数据构成与业务维度}
+原始表大致可分为 5 类（详见表~\ref{tab:raw-coverage} 的覆盖统计与第~\ref{tab:raw-file-map}~节的文件溯源表）：
+\begin{itemize}
+  \item \textbf{价格与预期：}现货价格（目标）、期货价格（快变量，覆盖较短）。
+  \item \textbf{成本：}丙烯、PDH、乙烯裂解、MTO、CTO 等多条生产路线成本（高度共线但经济含义不同）。
+  \item \textbf{供给：}PP 产量、进口量、检修损失、排产比例（结构性供给）。
+  \item \textbf{需求：}塑编/注塑/BOPP 等下游开工率（景气与季节性明显）。
+  \item \textbf{库存与宏观：}PP 石化库存（风险信号）、GDP（年度慢变量，作为背景景气）。
+\end{itemize}
+
+由于这些指标来自不同来源与口径，存在：频率不一致、缺失结构性强、部分变量公布存在滞后、且时间跨度差异显著。因此预处理的核心目标是：\textbf{把多源高频数据统一成“月度宽表”，并在严格滞后对齐下构造可用于预测的样本。}\par
+
+\subsection{覆盖差异与频率识别}
+表~\ref{tab:raw-coverage} 给出各因子的时间覆盖、频率判断与覆盖月数（由 \texttt{scripts/run\_pp\_eda.py} 自动统计）。可以看到：核心长覆盖因子（价格、丙烯/乙烯成本、库存、主要开工率、产量、进口等）可支撑 2015-01$\sim$2021-07 的长样本建模；而期货、PDH、检修、GDP 等变量覆盖较短，更适合作为“阶段/冲击”信号，需要配合缺失机制处理与敏感性对比。\par
+
+\input{tables/raw_data_coverage.tex}
+
+\subsection{统一月度化：周/日/年 $\rightarrow$ 月}
+本项目对每一张原始表统一生成月度特征口径（实现于 \texttt{pp\_forecast/aggregation.py}）：
+\begin{itemize}
+  \item 若表中包含 \texttt{最低/最高/平均}：以 \texttt{平均} 作为主序列，月内计算 \texttt{mean/min/max/last}，并用 \texttt{range=max-min} 刻画月内波动。
+  \item 若表中为单值序列（如库存、GDP）：同样计算 \texttt{mean/min/max/last/range}，以保持口径一致。
+\end{itemize}
+这样做的动机是：\textbf{月均值提供水平信息，而月内波动（range/last-mean）对拐点、冲击与风险状态更敏感}，可在后续特征工程中进一步利用。\par
+
+\subsection{时序对齐：$x(t-1)\rightarrow y(t)$ 与信息滞后}
+月度宽表生成后，我们将所有特征整体做 \texttt{shift(1)}，得到用于预测的输入 $X$。这一步非常关键：它把“能在 $t$ 月末看到的数据”转换成“用于预测 $t$ 月价格的可用信息”，从而与真实预测流程一致。\par
+\noindent 对低频宏观变量（GDP），我们先将年度值 \textbf{forward-fill} 到后续各月（直到下一次年度更新），再进行 \texttt{shift(1)}；这样 GDP 可作为“年度景气背景”特征进入月度模型，同时不引入未来信息。\par
+\noindent 对覆盖短且缺失结构明显的变量（期货、PDH、检修等），我们并行提供两种策略：默认在长样本下使用“中位数填补 + 缺失指示”保持样本量；在含期货方案中提供 \texttt{restrict} 模式，仅保留期货存在的月份做敏感性对比，避免将长段缺失完全依赖填补。\par
+
+\subsection{目标变量与标签构造（问题1/2共用）}
+以 \textbf{月均价口径}为默认（也支持月末价口径），构造：
+\begin{itemize}
+  \item 价格回归目标：$y_t$（月度 PP 价格）
+  \item 上月价格：$y_{t-1}$（记为 \texttt{y\_prev}）
+  \item 方向标签（严格口径）：若 $(y_t-y_{t-1})>0$ 为涨（1），否则为跌/不涨（0）
+  \item 月度收益率：$r_t=(y_t-y_{t-1})/y_{t-1}$（记为 \texttt{y\_return}）
+\end{itemize}
+其中 $y_{t-1}$ 同时作为重要的滞后自回归项参与建模；方向标签用于问题1的“涨/跌”输出，也为问题2的强度分档提供基础。\par
+
+\subsection{涨跌强度分档（问题2）}
+默认阈值（可配置）：强波动阈值 5\%（\texttt{strong\_threshold=0.05}），平稳阈值 0.5\%（\texttt{flat\_threshold=0.005}）。据此将 $r_t$ 分为 5 类：
+\[
+\texttt{big\_down},\;\texttt{small\_down},\;\texttt{flat},\;\texttt{small\_up},\;\texttt{big\_up}
+\]
+并在分类模型中输出各档概率（\texttt{predict\_proba}）。
+
+\subsection{缺失处理、标准化与可复现流水线}
+缺失主要来源于：（1）覆盖短带来的结构性缺失；（2）高频数据缺测或节假日导致的自然缺失；（3）指标公布滞后。为在“样本量有限”的月度场景下获得稳健模型，本项目在 scikit-learn Pipeline 内对全部数值特征统一进行：
+\begin{itemize}
+  \item 中位数填补（median imputation）+ 缺失指示特征
+  \item 标准化（StandardScaler）
+\end{itemize}
+保证不同量纲特征可比，并显式利用“缺失机制”信息。该流水线对线性模型尤为重要（避免量纲支配系数），对树模型则主要用于保持一致的特征处理接口。\par
+
+\subsection{数据集版本与输出文件}
+为对比“期货信息”与“特征工程”的边际收益，我们构建四套数据集并在后续统一评测（默认输出到 \texttt{outputs/datasets/}）：
+\begin{itemize}
+  \item \texttt{pp\_base.csv}：不含期货，长样本基准；
+  \item \texttt{pp\_with\_futures.csv}：含期货（覆盖短，支持 \texttt{restrict}）；
+  \item \texttt{pp\_base\_engineered.csv}：在基准上加入派生特征工程；
+  \item \texttt{pp\_with\_futures\_engineered.csv}：含期货 + 特征工程。
+\end{itemize}
+数据集构建命令见附录~\ref{app:repro}，并在问题1/2中对四套方案进行并行评估。\par
+
+\section{特征工程与描述性统计（时间序列EDA）}
+
+本节对应题目对“特征工程与描述性统计分析”的要求。我们同时对 \textbf{原始数据}、\textbf{月度聚合后的宽表}、以及 \textbf{建模数据集}做统计与可视化（输出均为 PDF）。
+
+\subsection{原始数据概览}
+我们对 PPData 的每张原始表都生成了“原始序列 + 月度平滑 + 分布直方图”（路径：\texttt{outputs/eda/raw/figures/}），用于检查频率差异、异常值与分布形态。为避免“图在上一页、解释在下一页”带来的空白，本节采用“\textbf{一行两图 + 紧接文字解读}”的排版方式：先展示同类因子（两张图），再分别解释每个因子的序列特征与业务含义。
+
+表~\ref{tab:raw-file-map} 汇总了本节每段对应的原始数据文件路径，便于溯源与复现。
+\input{tables/raw_data_paths.tex}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_PP价格.pdf}
+  \caption{PP价格（法定工作日）}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_期货价格.pdf}
+  \caption{期货价格（短数据）}
+\end{subfigure}
+\caption{原始数据：价格相关因子}
+\label{fig:raw-price-futures}
+\end{figure}
+
+\noindent\textbf{PP价格（现货）：}覆盖 2014-12 至 2021-07（约 80 个月），日度/不规则数据；均值约 8413、标准差约 907，取值范围约为 [6050, 11075]。时序上呈现明显的周期波动与波动聚集：2015--2016 年低位下行，随后进入多轮上行与回落，2018 年末出现阶段性高位，2020 年初出现急跌后修复。图中浅色“月度最小/最大范围”在拐点与冲击月份显著变宽，提示月内波动状态（\texttt{range}、\texttt{max-min}）本身携带有效信息；分布上主峰集中在中高价区间且右尾更长，说明极端高价月份虽少但会显著抬升均值并加大波动，从而提高均值预测难度。\par
+\noindent\textbf{期货价格：}覆盖 2019-10 至 2021-07（约 22 个月），均值约 7866、标准差约 707，范围约为 [5711, 9582]，且存在少量缺失（约 1.4\%）。时序上与现货同向且对拐点更敏感（2020 年急跌、2021 年快速上行阶段更为明显）；在月度聚合层面，期货与现货价格的斯皮尔曼相关在 lag0 约 0.97、lag1 仍约 0.89，表明其对价格水平解释力很强。业务上期货更接近“预期/风险偏好”的快变量，但覆盖期短会缩短有效样本，因此我们保留“纳入/不纳入期货”两套方案并进行对比评估。\par
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_PP产量.pdf}
+  \caption{PP产量（月度）}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_PP进口量.pdf}
+  \caption{PP进口量（月度，滞后一月更新）}
+\end{subfigure}
+\caption{原始数据：供需相关因子}
+\label{fig:raw-supply}
+\end{figure}
+
+\noindent\textbf{PP产量：}覆盖 2014-01 至 2021-06（90 个月），月度统计；均值约 1676、标准差约 348，范围约为 [988, 2395]。序列整体趋势上行，反映国内产能投放与装置稳定运行能力提升；月度波动并非随机噪声，往往对应检修、装置开停与需求旺淡季。由于产量具有趋势项，其与价格的简单相关并不强（例如月度聚合后 lag0 相关约 0.10、lag1 约 0.09），说明“供给水平”对价格的影响往往需要与成本、库存、需求共同解释，单独使用可能产生误判。\par
+\noindent\textbf{PP进口量：}覆盖 2010-01 至 2021-05（137 个月），月度统计且源数据标注“滞后一月更新”；均值约 299、标准差约 59，范围约为 [181, 576]。分布明显右偏并存在尖峰（少数月份进口量显著高于常态），体现外盘资源、国际价差与到港节奏的集中性。月度聚合后其与价格在较长滞后处出现负相关（例如 lag6 约 -0.13），符合“高价吸引进口、到港存在运输滞后”的机制。建模上更适合使用相对量与变化率（如 \texttt{供需\_\_进口\_div\_产量\_\_mean}、动量/滚动均值），并严格用上一月信息预测下一月以规避更新滞后带来的信息穿越。\par
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_排产比例.pdf}
+  \caption{排产比例（日度）}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_检修损失.pdf}
+  \caption{检修损失（月度）}
+\end{subfigure}
+\caption{原始数据：供给结构与检修因子}
+\label{fig:raw-supply-extra}
+\end{figure}
+
+\noindent\textbf{排产比例（拉丝级生产比例）：}覆盖 2014-01 至 2021-07（约 91 个月），日度/不规则数据；均值约 32.5、标准差约 4.3，范围约为 [12.5, 47.3]。该指标刻画“PP产出结构”而非总量：在总产量相近时，拉丝级比例上升往往意味着下游（塑编等）需求结构更偏向拉丝品种。其与价格的简单相关整体偏弱且在短滞后处为负（例如 lag0 约 -0.02、lag1 约 -0.16），提示排产比例可能更多是对价格/利润与订单结构的被动调整而非单向驱动；因此更适合以“变化率/偏离度”（例如环比变化、滚动 z-score）以及与下游开工的联动特征进入模型。\par
+\noindent\textbf{检修损失：}覆盖 2018-01 至 2021-06（42 个月），月度统计；均值约 247、标准差约 76.5，范围约为 [99, 386]。从业务逻辑看，检修损失代表供给收缩，应对价格形成支撑；但月度聚合后其与价格在短滞后处相关并不显著且略偏负（例如 lag0/lag1 约 -0.09），可能反映“低景气期更集中检修”的反向因果以及样本期较短（仅 42 个月）带来的不稳定。建模上更适合将其视为阶段性供给冲击信号，并配合成本、库存共同解释。\par
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_PDH成本.pdf}
+  \caption{PDH成本（日度）}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_丙烯成本.pdf}
+  \caption{丙烯成本（日度）}
+\end{subfigure}
+\caption{原始数据：成本相关因子}
+\label{fig:raw-cost}
+\end{figure}
+
+\noindent\textbf{PDH成本：}覆盖 2019-02 至 2021-07（约 30 个月），日度数据；均值约 6677、标准差约 848，范围约为 [4240, 8610]。2020 年前后存在明显的断崖式下跌与随后修复，体现能源/原料端冲击的快速传导。月度聚合后其与价格在短滞后处呈中等正相关（lag0 约 0.46），但由于覆盖期短，相关结构更容易受少数极端月份影响，需通过正则化、集成与稳健特征（价差/比值）控制不确定性。\par
+\noindent\textbf{丙烯成本：}覆盖 2011-01 至 2021-07（约 127 个月），日度数据；均值约 9082、标准差约 1760，范围约为 [4891, 12718]。时序中出现多次“制度切换”（不同宏观/能源状态下的成本区间），分布呈多峰与厚尾；与 PP 价格的相关性极强（月度聚合后 lag0 约 0.89、lag1 仍约 0.85），符合“成本驱动定价”的产业逻辑。建模上应重点刻画利润空间（现货-成本价差）与成本冲击的持续性（滚动均值/波动/动量），以提升对成本行情的识别。\par
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_乙烯成本.pdf}
+  \caption{乙烯成本（日度）}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_MTO成本.pdf}
+  \caption{MTO成本（日度）}
+\end{subfigure}
+\caption{原始数据：其他成本路线因子}
+\label{fig:raw-cost-extra1}
+\end{figure}
+
+\noindent\textbf{乙烯成本：}覆盖 2014-12 至 2021-07（约 80 个月），日度/不规则数据；均值约 6276、标准差约 913，范围约为 [3563, 8747]。该指标代表乙烯裂解路线成本，与能源价格与化工景气高度相关；月度聚合后其与 PP 价格呈显著正相关（lag0 约 0.73、lag1 约 0.65），体现替代品/上游共同驱动的联动行情。考虑到成本类因子之间高度共线，建模中应配合正则化或使用价差/比值特征降低冗余。\par
+\noindent\textbf{MTO成本：}覆盖 2016-01 至 2021-07（约 67 个月），日度/不规则数据；均值约 7277、标准差约 1293，范围约为 [4960, 10420]。序列波动幅度大且与价格上行周期高度同步；月度聚合后与 PP 价格的相关性较强（lag0 约 0.79、lag1 约 0.74）。由于覆盖期相对较短且波动受煤价/甲醇价与政策扰动影响明显，建议与其他成本路线共同构造“成本上行压力指数”或利润特征进入模型。\par
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_CTO成本.pdf}
+  \caption{CTO成本（日度）}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_GDP.pdf}
+  \caption{GDP（年度）}
+\end{subfigure}
+\caption{原始数据：煤化工与宏观因子}
+\label{fig:raw-cost-gdp}
+\end{figure}
+
+\noindent\textbf{CTO成本：}覆盖 2015-01 至 2021-07（约 79 个月），日度/不规则数据；均值约 5436、标准差约 703，范围约为 [4360, 8335]。与 PP 价格同样呈周期波动，但整体相关强度弱于丙烯/MTO（例如 lag0/lag1 约 0.55）；这可能与 CTO 路线在成本结构与行业边际供给中的地位有关。作为补充成本因子，其更适合与其他路线共同使用，以刻画“不同工艺的边际成本与供给弹性”。\par
+\noindent\textbf{GDP：}覆盖 2016--2020（5 个年度观测），年度数据；均值约 105.74、标准差约 1.78，范围约为 [102.3, 107.3]。考虑到 GDP 频率较低但可作为宏观“慢变量”，我们在构建月度宽表时将年度值 \textbf{forward-fill 到后续各月}（直到下一次年度更新），并仍保持 $\mathbf{x}_{t-1}\rightarrow y_t$ 的滞后对齐以避免信息泄露。这样 GDP 自 2017-01 起可作为“年度景气水平”背景特征进入月度模型，但其阶梯式变化决定了对短期波动的解释力有限，更适合与趋势/阶段变量共同使用，或通过差分刻画年度切换带来的边际影响。\par
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_PP石化库存.pdf}
+  \caption{PP石化库存（每3个工作日更新）}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_塑编开工率.pdf}
+  \caption{塑编开工率（周度）}
+\end{subfigure}
+\caption{原始数据：库存与下游景气因子}
+\label{fig:raw-inv-downstream}
+\end{figure}
+
+\noindent\textbf{PP石化库存：}覆盖 2011-01 至 2021-07（约 127 个月），高频更新（每 3 个工作日）；均值约 75.1、标准差约 15.2，范围约为 [45, 160]。库存序列短期起伏明显且右尾较长，存在少数尖峰（累库冲击），说明库存更像“风险信号”：当库存快速上冲时，价格往往承压或进入震荡。月度聚合后其与价格在短滞后呈负相关（lag1 约 -0.17、lag2 约 -0.22），方向符合经验，但强度有限，提示其效应可能依赖成本与需求状态（例如高成本下库存上升对价格的影响更大）。因此我们在特征工程中使用库存的 \texttt{last/range} 与比值特征来增强信号稳定性。\par
+\noindent\textbf{塑编开工率：}覆盖 2011-01 至 2021-07（约 127 个月），周度数据；均值约 62.6、标准差约 10.5，范围约为 [10, 83]。序列具有显著季节性（年初/春节附近低谷）并伴随少量异常低值点；长期中枢存在缓慢下移迹象，可能反映行业景气与产能利用率变化。其与价格的短滞后相关偏弱（lag0 约 -0.11），但在更长滞后处相关有所增强（例如 lag8 约 0.18），提示下游景气对价格的影响可能存在传导滞后。建模上更适合通过滚动统计、动量与“下游开工指数”类聚合特征来表征需求持续性，而非仅用单月水平值。\par
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_PP开工率.pdf}
+  \caption{PP开工率（注塑制品，周度）}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/raw/figures/raw_BOPP开工率.pdf}
+  \caption{BOPP开工率（月度）}
+\end{subfigure}
+\caption{原始数据：其他下游景气因子}
+\label{fig:raw-downstream-extra}
+\end{figure}
+
+\noindent\textbf{PP开工率（注塑制品）：}覆盖 2014-01 至 2021-07（约 91 个月），周度数据；均值约 55.1、标准差约 7.5，范围约为 [10, 67]。序列存在明显的节假日季节性（低谷月份集中）与阶段性回落；其与价格在短滞后处呈负相关（例如 lag0 约 -0.29），更像“价格反向压制下游开工”的表现而非单向需求驱动。为提升预测价值，建模中应优先使用上一月/多月平均与变化率（动量、滚动均值差）来刻画需求景气的持续性。\par
+\noindent\textbf{BOPP开工率：}覆盖 2010-01 至 2021-06（138 个月），月度统计；均值约 68.3、标准差约 12.9，范围约为 [31.0, 92.6]。长期看呈现明显周期与季节波动，但与 PP 价格的同步相关较弱（lag0 约 -0.06）；在中等滞后下相关上升（例如 lag6--lag8 约 0.29--0.33），提示其可能刻画更偏“终端需求/景气周期”的慢变量，对价格的影响存在传导与库存缓冲。该特征更适合作为阶段判断或与其他下游开工共同构造综合指数使用。\par
+
+\subsection{月度特征覆盖与缺失}
+\paragraph{数据口径与“覆盖”的定义}
+由于原始数据同时包含日度/周度/月度/年度序列，我们先将每张表统一聚合为\textbf{月度特征}（mean/min/max/last/range 五种口径）。在建模时统一采用 $\mathbf{x}_{t-1}\rightarrow y_t$ 以避免信息泄露，因此本小节的“可用性/覆盖”统一按\textbf{建模口径}统计：对每个预测月份 $t$，若上一月 $t-1$ 的该因子月度均值存在，则该因子在 $t$ 月可用（记为 1），否则记为缺失（0）。\par
+\paragraph{建模窗口}
+由于目标价格（PP 价格）最早可用于预测的月份为 2015-01（2014-12 用作 $t-1$ 特征），本项目的月度建模窗口为 2015-01 至 2021-07（共 79 个月）。表~\ref{tab:monthly-coverage-summary} 汇总各因子在该窗口内的首次/最后可用月份、可用月数与缺失率。\par
+
+\input{../outputs/eda/monthly/monthly_coverage_summary.tex}
+
+\paragraph{如何读图}
+图~\ref{fig:monthly-coverage} 上半部分为“特征可用性热力图”：\textbf{行=因子，列=预测月份 $t$}，颜色表示该月是否存在 $x_{t-1}$（上一月信息）。因此，像“期货价格/PDH成本/检修损失”这类覆盖较短的因子，会在时间轴上呈现“从某一时点开始出现的色块”；而 GDP 虽为年度数据，但我们将其 forward-fill 到后续月份，所以从 2017-01 起呈现连续可用（2015-01--2016-12 仍缺失）。\par
+\paragraph{关键结论（对建模的影响）}
+（1）多数核心因子（现货价格、丙烯/乙烯成本、库存、主要开工率、产量等）在 2015-01--2021-07 的窗口内几乎\textbf{全覆盖}，因此长样本建模的主要信息来源稳定；（2）少数因子存在\textbf{结构性缺失}：例如期货价格仅自 2019-11 起可用（受 $t-1$ 滞后影响），PDH 成本自 2019-03 起可用，检修损失自 2018-02 起可用；GDP 作为年度数据虽已 forward-fill 到后续月份，但在 2017 年之前仍缺失。对这些短覆盖特征，本项目采取两种策略并行：一是通过“中位数填补 + 缺失指示”在\textbf{长样本}下使用它们（缺失本身也可能携带阶段信息），二是在“含期货”方案中提供 \texttt{restrict} 模式，仅保留期货存在的月份做敏感性对比，避免将大段缺失完全依赖填补。\par
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.98\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/monthly/monthly_coverage_heatmap.pdf}
+  \caption{特征可用性热力图（建模口径：$x_{t-1}$ 是否存在）}
+\end{subfigure}
+\vspace{0.6em}
+\begin{subfigure}{0.98\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/monthly/monthly_coverage_counts.pdf}
+  \caption{各因子可用月份数（建模窗口内统计）}
+\end{subfigure}
+\caption{月度特征覆盖与缺失（由 \texttt{scripts/run\_pp\_eda.py} 生成；建模口径：$\mathbf{x}_{t-1}\rightarrow y_t$）}
+\label{fig:monthly-coverage}
+\end{figure}
+
+\subsection{平稳性检验与变换建议}
+表~\ref{tab:adf-factors} 对月度因子均值序列做 ADF 单位根检验，并同时报告“一阶差分”后的 $p$ 值，用于判断是否存在明显趋势项/随机游走成分。多数价格与成本类因子在水平值上难以拒绝单位根假设（$p>0.05$），但差分后显著平稳（$p\ll 0.05$）；这意味着在建模中，\textbf{变化信息（动量/收益率/价差的变化）往往比绝对水平更稳定}。因此，我们在可选的特征工程开关中为每个因子构造了 \texttt{pct\_change} 动量与滚动统计，并对成本路线进一步构造“现货-成本”的价差/比值，以增强对拐点与阶段切换的刻画能力。\par
+
+\input{../outputs/eda/monthly/adf_factors.tex}
+
+\noindent\textbf{备注：}期货由于覆盖较短，ADF 与相关分析更容易受少数月份影响；GDP 虽 forward-fill 后具备更长的月度序列，但其“阶梯型”变化使水平值通常仍表现为非平稳（需差分后更接近平稳）。因此这类慢变量更适合用作背景信号/阶段解释或与趋势特征结合，而不宜单独与高频因子做强因果解读。\par
+
+\subsection{因子共线性与信息冗余}
+图~\ref{fig:factor-corr} 展示了各因子月度均值的 Spearman 相关矩阵，用于识别“信息冗余”（高度共线）与潜在的替代关系。可以看到，多条成本路线之间存在显著正相关（如丙烯/乙烯/MTO/CTO），且与 PP 价格本身也高度同向；这符合产业逻辑，但也意味着把多条成本水平\textbf{同时}作为输入会引入较强共线性：线性模型中会导致系数不稳定、方差膨胀，树模型中则可能出现“重要性被分摊”。因此，本项目在建模上同时使用了（1）Ridge/Huber 等正则化/稳健线性模型，（2）树模型与集成学习，以及（3）更具经济含义的价差/比值特征，来降低共线性的负面影响并提升可解释性。\par
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\linewidth]{../outputs/eda/monthly/factor_corr_heatmap_spearman.pdf}
+\caption{因子月度均值相关矩阵（Spearman；下三角显示）}
+\label{fig:factor-corr}
+\end{figure}
+
+\subsection{关系稳定性：滚动滞后相关}
+即便总体相关较高，因子与价格关系也可能随阶段发生变化（例如库存与开工率常受“价格反向压制需求/供给调整”影响）。为检查这种不稳定性，我们对若干关键因子计算了滚动窗口的滞后相关（以 \texttt{shift(1)} 对齐：用 $x_{t-1}$ 与 $y_t$ 相关，避免信息泄露），结果如图~\ref{fig:rolling-lag1}。总体上，成本类因子对价格的滞后相关相对稳定且大多为正，但强度会随行情周期起伏；而库存、产量、开工率等“量”变量的相关方向与强度更容易出现阶段性翻转，提示其效应依赖于成本、库存与需求状态的组合。\par
+\noindent 这也解释了为什么在问题3中需要进行\textbf{分阶段因子筛选}：与其假设“全样本一套固定权重”，不如在不同阶段分别选择更有效的因子组，并通过正则化系数/集成权重来获得更稳健的影响度量。\par
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\linewidth]{../outputs/eda/monthly/rolling_lag1_spearman.pdf}
+\caption{滚动滞后相关（rolling Spearman corr($x(t-1)$, $y(t)$)；窗口=24月）}
+\label{fig:rolling-lag1}
+\end{figure}
+
+\subsection{建模数据集（pp\_base）EDA}
+\paragraph{样本窗口与目标分布}
+\texttt{pp\_base} 的建模窗口为 2015-01 至 2021-07（79 个月）。目标价格 $y$ 的均值约 8398、标准差约 881；月度收益率 $y\_return$ 的标准差约 4.8\%，极值约为 [-11.2\%, 12.0\%]，呈现一定厚尾与“波动聚集”，意味着单纯的均值回归在行情冲击月份更易失真。方向标签（涨/跌）在全样本上几乎均衡（40 vs 39），但强度五分类存在不均衡（\texttt{flat} 较少），因此问题2更适合使用 macro-F1 以及概率输出进行评估。\par
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\linewidth]{../outputs/eda/pp_base/target_series.pdf}
+\caption{目标序列：$y$ 与 $y\_return$（含测试窗阴影）}
+\label{fig:target-series}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/pp_base/return_distribution.pdf}
+  \caption{$y\_return$ 分布}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/pp_base/direction_counts.pdf}
+  \caption{方向标签}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/pp_base/strength_counts.pdf}
+  \caption{强度五分类}
+\end{subfigure}
+\caption{目标与标签分布（pp\_base）}
+\label{fig:target-label-dist}
+\end{figure}
+
+\paragraph{季节性、趋势与自相关}
+图~\ref{fig:seasonality-decompose} 的箱线图显示价格存在一定“月份效应”，而收益率的季节性更弱，提示用日历特征（月份/正余弦）去刻画长期规律更合适。季节分解进一步将序列拆解为趋势与季节项：趋势项平滑、季节项相对稳定，说明月度价格同时受“长期景气/成本中枢”与“周期性需求/库存变化”共同驱动。\par
+另一方面，$y$ 在 ACF 上通常表现为强自相关，而 $y\_return$ 的自相关显著更弱（图~\ref{fig:acf-y}），这也解释了本项目在建模上采用两条思路并行：（1）对 $y$ 做点预测并从中派生方向/强度；（2）直接对 $y\_return$ 的分档标签建模输出概率。\par
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.98\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/pp_base/seasonality_boxplots.pdf}
+  \caption{按月份的季节性箱线图}
+\end{subfigure}
+\vspace{0.6em}
+\begin{subfigure}{0.98\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/pp_base/seasonal_decompose_y.pdf}
+  \caption{y 的季节分解（趋势/季节/残差）}
+\end{subfigure}
+\caption{季节性与趋势分解（pp\_base）}
+\label{fig:seasonality-decompose}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.98\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/pp_base/acf_y.pdf}
+  \caption{价格水平 $y$ 的自相关（ACF）}
+\end{subfigure}
+\vspace{0.6em}
+\begin{subfigure}{0.98\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/pp_base/acf_y_return.pdf}
+  \caption{收益率 $y\_return$ 的自相关（ACF）}
+\end{subfigure}
+\caption{目标序列的自相关结构（pp\_base）}
+\label{fig:acf-y}
+\end{figure}
+
+\paragraph{缺失结构与“结构性缺失”}
+图~\ref{fig:missingness} 从因子组角度给出了逐月缺失率。可以看到，多数因子在 2015-01$\sim$2021-07 近乎连续覆盖；而短覆盖因子（期货、PDH、检修、GDP 等）会形成“整段缺失”，这类缺失并非随机噪声，更像“该阶段不可观测/未采集”的结构性信息。为保证长样本可用性，本项目默认采用“中位数填补 + 缺失指示”将缺失机制显式纳入模型；同时提供 \texttt{restrict} 方案仅保留特征存在的月份用于敏感性对比。\par
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\linewidth]{../outputs/eda/pp_base/missingness_heatmap.pdf}
+\caption{按因子组统计的逐月缺失率热力图（pp\_base）}
+\label{fig:missingness}
+\end{figure}
+
+\paragraph{与目标的相关性：水平值 vs 变化值}
+图~\ref{fig:corr-y} 对比了“与 $y$”以及“与 $y\_return$”的相关性 Top-20。可以看到：
+（1）水平值 $y$ 的相关性主要由成本类（尤其丙烯）与价格自身的滞后项解释，反映“成本驱动 + 价格惯性”的主逻辑；
+（2）收益率 $y\_return$ 的相关性整体更弱、且更依赖短覆盖的冲击因子与结构特征（例如 PDH 成本、排产比例、检修损失等），说明对拐点/波动的刻画更需要“变化/形态”类特征与稳健的正则化/集成。\par
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.98\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/pp_base/top_corr_with_y.pdf}
+  \caption{与 $y$ 的相关性（Top-20，Spearman）}
+\end{subfigure}
+\vspace{0.6em}
+\begin{subfigure}{0.98\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/pp_base/top_corr_with_y_return.pdf}
+  \caption{与 $y\_return$ 的相关性（Top-20，Spearman）}
+\end{subfigure}
+\caption{特征与目标的相关性对比（pp\_base；特征已按 $t-1$ 对齐）}
+\label{fig:corr-y}
+\end{figure}
+
+\subsection{派生特征工程（可选开关）}
+\paragraph{设计原则（只用过去信息）}
+派生特征工程的目标是把“水平信号”转化为更稳健的“变化/形态/相对关系”信号，从而提升对拐点与阶段切换的刻画能力。为避免信息泄露，我们先完成统一月度聚合与 $\mathbf{x}_{t-1}\rightarrow y_t$ 的滞后对齐，再在已滞后序列上构造派生特征（例如滚动均值、动量、价差等），确保任何特征都不使用 $t$ 月之后的信息。\par
+
+\paragraph{派生特征族（与后续建模强相关）}
+本项目的特征工程覆盖 6 类（实现于 \texttt{pp\_forecast/feature\_engineering.py}）：
+（1）\textbf{动量/滚动统计：}对每个因子月均值构造 \texttt{pct\_change} 动量（1/3/12 月）与 3/6/12 月滚动均值、滚动波动；
+（2）\textbf{月内形态：}用 \texttt{range\_over\_mean}、\texttt{last\_minus\_mean} 等刻画“当月波动状态/收盘偏离”；
+（3）\textbf{价差/比值（利润与相对强弱）：}构造“现货-成本”（丙烯/乙烯/MTO/CTO/PDH）与“现货/成本”比值；
+（4）\textbf{供需比值：}进口/产量、库存/产量、检修损失/产量等相对量；
+（5）\textbf{下游指数：}对塑编/注塑/BOPP 开工率取均值形成需求景气综合指标；
+（6）\textbf{日历与趋势：}时间索引、月份正余弦以刻画季节性与长期漂移。\par
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/pp_base_engineered/feature_engineering_counts.pdf}
+  \caption{各特征族数量（pp\_base\_engineered）}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{../outputs/eda/pp_base_engineered/top_corr_with_y_return.pdf}
+  \caption{与 $y\_return$ 的相关性 Top-20（pp\_base\_engineered）}
+\end{subfigure}
+\caption{派生特征工程的规模与效果（示例：pp\_base\_engineered）}
+\label{fig:fe-overview}
+\end{figure}
+
+\paragraph{对建模的直接收益}
+从图~\ref{fig:fe-overview} 可以看到，派生特征显著增加了“变化/形态/相对关系”维度的信息供给：与 $y\_return$ 的相关性 Top-20 中，更多出现动量、滚动波动、月内形态与价差/比值特征，这些特征与“涨跌方向/强度”的任务定义更一致，也解释了为什么在问题2中“特征工程版本”的强度分类效果明显提升。与此同时，派生特征会带来维度膨胀与共线性增强，因此我们在模型侧配套使用了正则化（Ridge/ElasticNet）、稳健损失（Huber）与集成方法（RF/GBDT/Bagging/Top-k 集成）来控制过拟合风险。\par
+
+\section{问题1：PP价格月度预测与涨跌方向}
+
+\subsection{问题设定与评价设计}
+问题1包含两个输出：\textbf{（1）价格点预测} $\hat y_t$，\textbf{（2）由点预测派生的涨跌方向} $\widehat{\mathbb{I}(y_t-y_{t-1}>0)}$。其中方向预测严格按上一月价格 $y_{t-1}$ 与预测价 $\hat y_t$ 的差值确定，保证与真实业务决策一致。\par
+
+按题目提示，我们使用连续时间窗口作为测试集：默认测试窗为 \textbf{2021-01$\sim$2021-07}，训练集为其之前所有月份，并保持时间顺序（不打乱）。在训练集内部，我们额外使用时间序列交叉验证（TimeSeriesSplit）估计模型稳定性，并为集成学习提供权重依据。\par
+
+评价指标包括：
+\begin{itemize}
+  \item 回归：MAE、RMSE、MAPE
+  \item 方向：Accuracy、Precision、Recall（方向定义严格按 $(y_t-y_{t-1})>0$ 为涨）
+\end{itemize}
+其中 RMSE 对极端误差更敏感，更符合价格预测中的风险偏好；方向指标用于衡量策略层面的判断能力（能否抓住涨/跌）。\par
+
+\subsection{基线模型（必须项）与可解释对照}
+基线模型仅使用历史价格序列本身，不引入外生因子，是检验“特征是否真的带来增益”的必要对照。我们实现了：
+\begin{itemize}
+  \item \textbf{Naive：} $\hat y_t=y_{t-1}$，反映价格惯性；
+  \item \textbf{Seasonal-12：} $\hat y_t=y_{t-12}$，反映年度季节性假设。
+\end{itemize}
+表~\ref{tab:q1-baselines} 显示 naive 在测试窗上已能取得较低误差（RMSE 约 372），说明月度价格具有较强惯性；但其方向 Precision/Recall 为 0，意味着在该测试窗内 naive 的涨跌判断几乎退化为“全押同一方向”。这也从侧面说明：\textbf{要提升方向判断与拐点刻画能力，必须引入成本、库存、开工等外生信息以及变化/形态特征。}\par
+
+\input{tables/q1_baselines.tex}
+
+\subsection{特征集与模型族}
+为对比“期货信息”和“派生特征工程”的边际收益，我们对四套数据集并行训练与评测：\texttt{pp\_base / pp\_base\_engineered / pp\_with\_futures / pp\_with\_futures\_engineered}。其中“含期货”方案由于覆盖短，默认采用 \texttt{restrict} 以保证期货变量真实可用。\par
+
+模型方面，我们覆盖了线性/非线性/集成三大类，并统一在 Pipeline 内做缺失填补、缺失指示与标准化（线性/距离模型尤为关键）。主要模型与关键参数见表~\ref{tab:model-hparams}，完整参数会在运行后输出到 \texttt{outputs/metrics/<dataset>/pp\_params\_<model>.json}。\par
+
+\input{tables/model_hyperparams.tex}
+
+\subsection{集成学习与模型选择策略}
+考虑到月度样本量有限、单模型不稳定，我们在回归侧实现了多种集成策略（均值/中位数/截尾/训练集CV加权/Top-k CV加权）。其核心思想是：\textbf{把“模型不确定性”显式平均掉}，尤其在拐点月份可减少某个模型偶然偏离导致的大误差。\par
+\noindent 其中 \texttt{ensemble\_cv\_weighted} 会在训练集上做时间序列交叉验证，按 $1/\text{RMSE}^2$ 归一化得到权重，对测试集预测做加权平均；\texttt{ensemble\_topk\_cv\_weighted} 则只选取 CV 表现最好的 Top-k 模型，进一步抑制弱模型拖累。\par
+
+\subsection{结果、可视化与误差分析}
+表~\ref{tab:q1-summary} 汇总了四种方案在测试窗上的最优结果（按 RMSE 选择）。整体结论非常清晰：\textbf{长样本 + 特征工程（pp\_base\_engineered）} 在 RMSE/MAE 与方向指标上均最优；而“含期货(restrict)”方案由于训练样本显著变短，在该测试窗内反而劣于不含期货的长样本方案。\par
+
+\input{tables/q1_results_summary.tex}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\linewidth]{../outputs/report_figures/q1_test_predictions_best_models.pdf}
+\caption{测试窗最佳模型预测对比（每种方案取 RMSE 最低；由 \texttt{scripts/run\_pp\_report\_figures.py} 生成）}
+\label{fig:q1-best-preds}
+\end{figure}
+
+\paragraph{关键讨论}
+\begin{itemize}
+  \item \textbf{特征工程显著降低误差：}在不含期货的长样本上，引入“动量/滚动统计/价差/供需比值/形态”后 RMSE 从约 221 降至约 156，且方向在该 7 个月测试窗上达到 1.0（需注意测试窗较短，仍需更长滚动回测检验稳定性）。
+  \item \textbf{期货信息的样本代价：}期货变量覆盖仅约 22 个月，\texttt{restrict} 会大幅缩短训练集，导致模型更依赖填补/正则化，整体效果不如长样本；因此期货更适合作为“敏感性对照”或在未来补全数据后再纳入主模型。
+  \item \textbf{集成学习的稳健性：}图~\ref{fig:q1-best-preds} 中，CV 加权集成整体更平滑、更少出现单点跳变，符合“平均模型不确定性”的设计目标；在行情快速变化月份，集成能一定程度抑制过度追涨杀跌。
+  \item \textbf{解释与业务含义：}结合 EDA 与问题3的阶段筛选结果，成本（尤其丙烯/乙烯/煤化工路线）与库存通常是解释价格水平的主因子；而方向/强度更依赖变化与形态特征（动量、价差变化、月内波动状态）。
+\end{itemize}
+
+\section{问题2：涨跌强度预测与概率输出}
+
+\subsection{任务设定与难点}
+问题2要求输出“涨跌强度”的离散档位及其概率。与问题1不同，强度预测更关注\textbf{变化幅度}而非价格水平：在 EDA 中我们已经看到 $y\_return$ 的相关性更弱、且更依赖冲击与形态特征；同时强度五分类存在类别不均衡（\texttt{flat} 较少），因此需使用 macro-F1 等更公平的指标。\par
+
+\subsection{两条建模路径（数值 vs 概率）}
+本项目同时提供两条实现路径并在输出文件中完整保留：
+\begin{itemize}
+  \item \textbf{路径A（回归派生）：}先预测 $\hat y_t$，再计算 $\hat r_t=(\hat y_t-y_{t-1})/y_{t-1}$，并按阈值映射到强度档位（得到\textbf{数值涨跌幅预测}与离散档位）。
+  \item \textbf{路径B（强度多分类）：}直接以 \texttt{y\_strength} 五分类建模，输出每一档概率 \texttt{proba\_\_*}（满足题目“输出出现相关涨跌幅度的概率”）。
+\end{itemize}
+两条路径的差异在于：路径A的概率需要额外假设（如残差分布）才能得到，而路径B天然输出概率但更依赖特征对“变化幅度”的解释力。为此，我们在路径B中重点使用派生特征工程（动量/滚动波动/价差等）并采用集成分类器增强稳定性。\par
+
+\subsection{评价指标与概率输出口径}
+对强度五分类，报告：Accuracy、macro-Precision、macro-Recall、macro-F1（时间窗同问题1）。其中 macro-F1 对少数类更敏感，更能反映“极端涨跌”识别能力。\par
+\noindent 概率输出采用 \texttt{predict\_proba}：每个测试月给出五档概率向量 $\hat p(\text{class}\mid\mathbf{x}_{t-1})$。此外，对于路径A我们提供可选 residual bootstrap（\texttt{--bootstrap N}），在不改变点预测模型的前提下，通过重采样训练残差近似得到价格区间、收益率区间以及 $p(\text{up})$。\par
+
+\subsection{结果摘要与可视化解释}
+表~\ref{tab:q2-summary} 给出四套数据集的最佳强度分类结果（按 macro-F1 选取）。可以看到：\textbf{特征工程对强度任务收益显著}，\texttt{pp\_base\_engineered} 的最佳模型在本次运行中取得最高 macro-F1；而含期货方案由于样本缩短，对五分类的泛化更不稳定。\par
+
+\input{tables/q2_results_summary.tex}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\linewidth]{../outputs/report_figures/q2_strength_probabilities_best_model.pdf}
+\caption{强度五分类概率输出示例（pp\_base\_engineered；测试窗；由 \texttt{scripts/run\_pp\_report\_figures.py} 生成）}
+\label{fig:q2-proba}
+\end{figure}
+
+\paragraph{概率输出文件与业务解读}
+对每个测试月，\texttt{pp\_strength\_test\_predictions.csv} 与 \texttt{pp\_strength\_ensemble\_test\_predictions.csv} 给出 \texttt{strength\_pred} 以及各档概率；回归路径的数值涨跌幅预测见 \texttt{pp\_test\_predictions.csv} 的 \texttt{return\_pred}。\par
+\noindent 业务上，概率输出可直接用于风险管理：当概率集中在 \texttt{big\_up/big\_down} 时，意味着模型认为行情处于“高波动偏向”状态，可对应更强的库存/套保策略；当概率主要集中于 \texttt{flat} 或相邻档位时，说明不确定性较高，更适合采用保守策略或等待更多信息。\par
+
+\section{问题3：分阶段关键因子筛选与权重}
+
+\subsection{动机：因子作用的阶段性}
+从滚动滞后相关（图~\ref{fig:rolling-lag1}）可以看到，成本类因子与价格的关系相对稳定，而库存、开工率、产量等“量”变量的相关方向与强度更容易随阶段翻转。这意味着用“全样本一套固定权重”去解释因子贡献往往不稳健。因此问题3的目标是：\textbf{先识别行业周期阶段，再在每个阶段内自动筛选关键因子组并输出权重。}\par
+
+\subsection{阶段划分方法（趋势 $\times$ 波动）}
+我们用收益率构造趋势与波动特征（默认窗口均为 6 个月）：
+\[
+\text{trend}_t = \frac{y_t}{y_{t-6}}-1,\qquad
+\text{vol}_t = \mathrm{Std}(r_{t-5:t})
+\]
+其中趋势按阈值（默认 $\pm2\%$）分为 \texttt{up/down/flat}，波动按分位数（默认 0.6 分位）分为 \texttt{high\_vol/low\_vol}，两者拼接得到 \texttt{regime}（例如 \texttt{up\_high\_vol}）。为避免短期噪声导致频繁切换，我们将长度小于 6 个月的 regime 段合并到相邻段（优先合并到收益率均值更接近的一侧），得到最终阶段 \texttt{stage\_id}。\par
+\noindent 阶段划分的输出见表~\ref{tab:q3-stage-summary} 与图~\ref{fig:q3-stages}（由 \texttt{scripts/run\_q3\_stage\_factor\_selection.py} 生成）。\par
+
+\input{tables/q3_stage_summary.tex}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\linewidth]{../outputs/q3/pp_base/q3_stages_price.pdf}
+\caption{PP月度价格与阶段边界（pp\_base）}
+\label{fig:q3-stages}
+\end{figure}
+
+\subsection{阶段内关键因子组自动筛选与权重计算}
+在每个阶段内，我们以 Ridge 回归拟合 $\mathbf{x}_{t-1}\rightarrow y_t$，并输出系数。为提升可解释性，我们把特征按“因子组”聚合（同一前缀，如 \texttt{丙烯成本\_\_mean}、\texttt{丙烯成本\_\_range} 等都归入 \texttt{丙烯成本} 组），并对组内系数绝对值求和得到组权重：
+\[
+ w(g)=\frac{\sum_{f\in g}|\beta_f|}{\sum_{f}|\beta_f|}
+\]
+其中 $w(g)$ 可解释为“该阶段内该因子组对预测的相对贡献”。Ridge 的作用是抑制成本路线间的共线性导致的系数不稳定；同时我们默认不将 \texttt{PP价格} 自身作为候选因子组（避免自回归项掩盖外生因子），从而更聚焦于“供需/成本/库存/需求/宏观”等解释因素。\par
+\noindent 表~\ref{tab:q3-top-groups} 给出 \texttt{pp\_base} 的 Top-5 因子组示例；同时，我们也对强度任务在每个阶段内训练多项 Logistic 回归并输出组权重（见 \texttt{q3\_strength\_logreg\_group\_weights.csv}），用于解释“哪些因子更影响涨跌幅度的分档”。\par
+
+\input{tables/q3_top_groups.tex}
+
+为体现“结合问题2模型”的阶段解释，我们同样对强度任务在每个阶段内训练多项 Logistic 回归，并按系数幅度归一化得到因子组权重；Top-5 结果见表~\ref{tab:q3-top-groups-strength}。\par
+\input{tables/q3_top_groups_strength.tex}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.90\linewidth]{../outputs/report_figures/q3_ridge_group_weights_heatmap.pdf}
+\caption{阶段内因子组权重热力图（pp\_base；Ridge 绝对系数归一化；由 \texttt{scripts/run\_pp\_report\_figures.py} 生成）}
+\label{fig:q3-weights-heatmap}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.90\linewidth]{../outputs/report_figures/q3_strength_logreg_group_weights_heatmap.pdf}
+\caption{阶段内因子组权重热力图（强度任务；LogReg 系数幅度归一化；由 \texttt{scripts/run\_pp\_report\_figures.py} 生成）}
+\label{fig:q3-weights-heatmap-strength}
+\end{figure}
+
+\paragraph{阶段性结论与业务解释}
+综合表~\ref{tab:q3-top-groups} 与图~\ref{fig:q3-weights-heatmap}，可以得到较一致的解释框架：成本类因子（丙烯/乙烯/MTO/CTO/PDH）在多数阶段都具有较高权重，代表“定价中枢”；库存与下游开工率在部分阶段显著抬升，更多反映“供需错配/风险状态”；供给侧（产量、进口、检修、排产）在高波动阶段更容易进入 Top 组，提示阶段切换往往伴随供给冲击或结构调整。GDP 作为慢变量更像背景信息，其权重通常较低但在部分阶段可作为景气解释项出现。\par
+\noindent 这类阶段化权重输出一方面能为模型提供可解释性（告诉我们“这个阶段主要在讲成本还是讲库存”），另一方面也能反向指导特征工程：例如在高波动阶段更重视动量/波动/价差变化，在低波动阶段更重视水平与季节性。\par
+
+\section{总结：不足与展望}
+\begin{itemize}
+  \item \textbf{数据覆盖不一致：}不同因子起止时间差异显著，尤其期货覆盖较短；未来可引入“缺失机制建模”或更精细的特征筛选策略。
+  \item \textbf{样本量有限：}月度样本数不大，复杂模型易过拟合；可进一步采用滚动回测、多窗口稳定性检验。
+  \item \textbf{概率输出改进：}当前强度概率来自分类器 soft-voting；未来可做概率校准（Platt/Isotonic）或分布预测（分位数回归、block bootstrap）。
+  \item \textbf{阶段划分改进：}可对比变点检测/HMM 等更贴近行业周期的分段方法，并结合业务解释阶段含义。
+\end{itemize}
+
+\clearpage
+\appendix
+
+\section*{附录目录}
+\addcontentsline{toc}{section}{附录目录}
+\begin{itemize}
+  \item 附录A：可复现代码结构与运行命令
+  \item 附录B：主要输出文件说明
+  \item 附录C：完整模型对比表（CSV 输出路径）
+\end{itemize}
+
+\section{附录A：可复现代码结构与运行命令}
+\label{app:repro}
+
+\begin{lstlisting}[style=code,language=bash,caption={生成数据集 / EDA / 建模 / 问题3（建议在 lchen 环境中运行）}]
+conda run -n lchen python scripts/build_pp_dataset.py --target-metric mean --output outputs/datasets/pp_base.csv
+conda run -n lchen python scripts/build_pp_dataset.py --include-futures --output outputs/datasets/pp_with_futures.csv
+
+conda run -n lchen python scripts/build_pp_dataset.py --engineer-features --output outputs/datasets/pp_base_engineered.csv
+conda run -n lchen python scripts/build_pp_dataset.py --include-futures --engineer-features --output outputs/datasets/pp_with_futures_engineered.csv
+
+conda run -n lchen python scripts/run_pp_eda.py
+conda run -n lchen python scripts/run_pp_models.py --dataset outputs/datasets/pp_base.csv
+
+conda run -n lchen python scripts/run_q3_stage_factor_selection.py --dataset outputs/datasets/pp_base.csv --also-strength
+\end{lstlisting}
+
+\section{附录B：主要输出文件说明}
+\label{app:outputs}
+\begin{itemize}
+  \item \textbf{数据集：}\texttt{outputs/datasets/pp\_*.csv}
+  \item \textbf{EDA：}\texttt{outputs/eda/}（PDF 图 + CSV 统计表，如 ACF、ADF、缺失率热力图等）
+  \item \textbf{问题1/2 指标：}\texttt{outputs/metrics/<dataset>/pp\_model\_metrics.csv}、\texttt{pp\_strength\_model\_metrics.csv}
+  \item \textbf{问题2 概率：}\texttt{pp\_strength\_test\_predictions.csv}、\texttt{pp\_strength\_ensemble\_test\_predictions.csv}
+  \item \textbf{Bootstrap：}\texttt{pp\_bootstrap\_predictions.csv}（可选开关 \texttt{--bootstrap}）
+  \item \textbf{问题3：}\texttt{outputs/q3/<dataset>/q3\_ridge\_group\_weights.csv}、\texttt{q3\_stages\_price.pdf} 等
+\end{itemize}
+
+\section{附录C：完整模型对比表（CSV 路径）}
+\label{app:full-tables}
+\subsection{问题1：全模型对比（回归/方向）}
+\input{tables/appendix_q1_full_regression.tex}
+\input{tables/appendix_q1_full_direction.tex}
+
+\subsection{问题2：全模型对比（强度五分类）}
+\input{tables/appendix_q2_full_strength.tex}
+
+\paragraph{CSV 输出路径（可复现与二次分析）}
+为便于二次分析与复现实验，完整模型对比明细同时以 CSV 形式保存于：
+\begin{itemize}
+  \item \texttt{outputs/metrics/pp\_base/pp\_model\_metrics.csv}
+  \item \texttt{outputs/metrics/pp\_base/pp\_strength\_model\_metrics.csv}
+  \item 其余数据集同理（目录名为数据集 stem）
+\end{itemize}
+
+\end{document}

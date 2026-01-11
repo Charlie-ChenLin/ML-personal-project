@@ -8,11 +8,11 @@ import sys
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from pp_forecast.q1_dataset import build_q1_dataset
+from pp_forecast.dataset import build_pp_dataset
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Build Q1 monthly dataset (PP price prediction).")
+    p = argparse.ArgumentParser(description="Build PP monthly dataset (price prediction project).")
     p.add_argument("--data-dir", type=Path, default=Path("PP数据"))
     p.add_argument("--target-metric", choices=["mean", "last"], default="mean")
     p.add_argument("--include-futures", action="store_true", help="Include file 13 futures factor.")
@@ -33,13 +33,13 @@ def parse_args() -> argparse.Namespace:
         default=0.005,
         help="Return threshold treated as flat/no-change (e.g. 0.005 means ±0.5%).",
     )
-    p.add_argument("--output", type=Path, default=Path("outputs/datasets/q1_dataset.csv"))
+    p.add_argument("--output", type=Path, default=Path("outputs/datasets/pp_dataset.csv"))
     return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    ds = build_q1_dataset(
+    ds = build_pp_dataset(
         data_dir=args.data_dir,
         target_metric=args.target_metric,
         include_futures=args.include_futures,

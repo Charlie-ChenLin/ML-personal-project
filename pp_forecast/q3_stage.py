@@ -202,6 +202,7 @@ def _default_feature_cols(df: pd.DataFrame) -> list[str]:
         "month",
         "stage_id",
         "regime",
+        "regime_merged",
         "trend",
         "vol",
         "trend_state",

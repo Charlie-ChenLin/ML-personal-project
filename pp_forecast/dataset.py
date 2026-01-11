@@ -20,7 +20,7 @@ TargetMetric = Literal["mean", "last"]
 
 
 @dataclass(frozen=True)
-class Q1Dataset:
+class PPDataset:
     target_metric: TargetMetric
     include_futures: bool
     engineer_features: bool
@@ -83,7 +83,7 @@ def _agg_one_source(df: pd.DataFrame) -> pd.DataFrame:
     return res.data
 
 
-def build_q1_dataset(
+def build_pp_dataset(
     *,
     data_dir: Path,
     target_metric: TargetMetric = "mean",
@@ -92,7 +92,7 @@ def build_q1_dataset(
     strong_threshold: float = 0.05,
     flat_threshold: float = 0.005,
     fe_config: FeatureEngineeringConfig | None = None,
-) -> Q1Dataset:
+) -> PPDataset:
     if target_metric not in ("mean", "last"):
         raise ValueError("target_metric must be one of: mean/last")
 
@@ -113,6 +113,12 @@ def build_q1_dataset(
         features.append(agg)
 
     feature_table = pd.concat(features, axis=1).sort_index()
+
+    # GDP is annual; forward-fill its latest value to subsequent months so it can act as a
+    # slow-moving macro feature in monthly models.
+    gdp_cols = [c for c in feature_table.columns if c.startswith("GDP__")]
+    if gdp_cols:
+        feature_table[gdp_cols] = feature_table[gdp_cols].ffill()
 
     price_col = f"PP价格__{target_metric}"
     if price_col not in feature_table.columns:
@@ -152,7 +158,7 @@ def build_q1_dataset(
     if engineer_features:
         out = add_engineered_features(out, config=fe_config)
 
-    return Q1Dataset(
+    return PPDataset(
         target_metric=target_metric,
         include_futures=include_futures,
         engineer_features=engineer_features,

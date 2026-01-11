@@ -1,0 +1,19 @@
+% Summary from outputs/metrics/*/pp_strength_model_metrics.csv (test window: 2021-01~2021-07)
+\begin{table}[H]
+\centering
+\caption{问题2：涨跌强度（五分类）与概率输出（最佳模型摘要，按 macro-F1 选取）}
+\label{tab:q2-summary}
+\small
+\begin{TableFit}
+\begin{tabular}{llllrrrr}
+\toprule
+数据集 & 方案 & 最佳模型 & F1\_macro & Acc & Precision\_macro & Recall\_macro \\
+\midrule
+pp\_\allowbreak base & 不含期货 & ensemble\_\allowbreak proba\_\allowbreak topk\_\allowbreak cv\_\allowbreak weighted & 0.600 & 0.571 & 0.750 & 0.750 \\
+pp\_\allowbreak base\_\allowbreak engineered & 不含期货+特征工程 & ada\_\allowbreak clf & 0.852 & 0.857 & 0.933 & 0.833 \\
+pp\_\allowbreak with\_\allowbreak futures & 含期货(restrict) & logreg & 0.354 & 0.571 & 0.438 & 0.312 \\
+pp\_\allowbreak with\_\allowbreak futures\_\allowbreak engineered & 含期货+特征工程(restrict) & logreg & 0.333 & 0.571 & 0.400 & 0.312 \\
+\bottomrule
+\end{tabular}
+\end{TableFit}
+\end{table}

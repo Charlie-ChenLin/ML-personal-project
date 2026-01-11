@@ -14,8 +14,8 @@ import pandas as pd
 from sklearn.base import clone
 from sklearn.model_selection import TimeSeriesSplit
 
-from pp_forecast.q1_dataset import strength_label
-from pp_forecast.q1_models import (
+from pp_forecast.dataset import strength_label
+from pp_forecast.models import (
     build_models,
     build_strength_models,
     direction_metrics,
@@ -25,11 +25,11 @@ from pp_forecast.q1_models import (
     regression_metrics,
     strength_metrics,
 )
-from pp_forecast.q1_ts_models import fit_predict_prophet, fit_predict_sarimax
+from pp_forecast.ts_models import fit_predict_prophet, fit_predict_sarimax
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Run Q1 models and evaluate on a time window.")
+    p = argparse.ArgumentParser(description="Run PP models and evaluate on a time window.")
     p.add_argument("--dataset", type=Path, required=True)
     p.add_argument("--test-start", default="2021-01")
     p.add_argument("--test-end", default="2021-07")
@@ -241,7 +241,7 @@ def main() -> None:
         )
 
         try:
-            with open(output_dir / f"q1_params_{model_name}.json", "w", encoding="utf-8") as f:
+            with open(output_dir / f"pp_params_{model_name}.json", "w", encoding="utf-8") as f:
                 json.dump(res.params, f, ensure_ascii=False, indent=2, default=str)
         except Exception:
             # writing params is non-critical for the main metrics outputs
@@ -309,7 +309,7 @@ def main() -> None:
         pred_rows.append(pd.DataFrame(pred_payload))
 
         try:
-            with open(output_dir / f"q1_params_{ts_name}.json", "w", encoding="utf-8") as f:
+            with open(output_dir / f"pp_params_{ts_name}.json", "w", encoding="utf-8") as f:
                 json.dump(res.params, f, ensure_ascii=False, indent=2, default=str)
         except Exception:
             pass
@@ -367,7 +367,7 @@ def main() -> None:
 
         if cv_rows:
             pd.DataFrame(cv_rows).sort_values("cv_RMSE_mean").to_csv(
-                output_dir / "q1_model_cv.csv", index=False
+                output_dir / "pp_model_cv.csv", index=False
             )
 
     # Simple ensembles across successful regressors
@@ -424,7 +424,7 @@ def main() -> None:
                     pred_payload["strength_pred"] = strength_pred
                 pred_rows.append(pd.DataFrame(pred_payload))
 
-                with open(output_dir / f"q1_params_{name}.json", "w", encoding="utf-8") as f:
+                with open(output_dir / f"pp_params_{name}.json", "w", encoding="utf-8") as f:
                     json.dump({"ensemble_of": used_models}, f, ensure_ascii=False, indent=2)
 
             _append_ens("ensemble_mean", ens_mean)
@@ -480,15 +480,15 @@ def main() -> None:
     metrics_df = pd.DataFrame(model_rows)
     if not metrics_df.empty and "RMSE" in metrics_df.columns:
         metrics_df = metrics_df.sort_values("RMSE")
-    metrics_df.to_csv(output_dir / "q1_model_metrics.csv", index=False)
+    metrics_df.to_csv(output_dir / "pp_model_metrics.csv", index=False)
 
     if baselines:
-        with open(output_dir / "q1_baselines.json", "w", encoding="utf-8") as f:
+        with open(output_dir / "pp_baselines.json", "w", encoding="utf-8") as f:
             json.dump(baselines, f, ensure_ascii=False, indent=2)
 
     if pred_rows:
         preds = pd.concat(pred_rows, axis=0, ignore_index=True)
-        preds.to_csv(output_dir / "q1_test_predictions.csv", index=False)
+        preds.to_csv(output_dir / "pp_test_predictions.csv", index=False)
 
     # Strength classification models (输出“涨跌幅度区间”的概率)
     if strength_true is not None:
@@ -524,16 +524,19 @@ def main() -> None:
                     "strength_pred": res.y_pred,
                 }
             )
+            # Align indexes before column-wise concat (df_test keeps original row indexes).
+            pred_df = pred_df.reset_index(drop=True)
+            proba_df = proba_df.reset_index(drop=True)
             strength_pred_rows.append(pd.concat([pred_df, proba_df], axis=1))
 
             with open(
-                output_dir / f"q1_strength_params_{model_name}.json", "w", encoding="utf-8"
+                output_dir / f"pp_strength_params_{model_name}.json", "w", encoding="utf-8"
             ) as f:
                 json.dump(res.params, f, ensure_ascii=False, indent=2, default=str)
 
         if strength_pred_rows:
             strength_preds = pd.concat(strength_pred_rows, axis=0, ignore_index=True)
-            strength_preds.to_csv(output_dir / "q1_strength_test_predictions.csv", index=False)
+            strength_preds.to_csv(output_dir / "pp_strength_test_predictions.csv", index=False)
 
         # Optional: CV on training set (for weighted/top-k ensembling)
         strength_cv: dict[str, float] = {}
@@ -577,7 +580,7 @@ def main() -> None:
             if strength_cv_rows:
                 pd.DataFrame(strength_cv_rows).sort_values(
                     "cv_Strength_F1_macro_mean", ascending=False
-                ).to_csv(output_dir / "q1_strength_model_cv.csv", index=False)
+                ).to_csv(output_dir / "pp_strength_model_cv.csv", index=False)
 
         # Ensembling (soft voting)
         if strength_probas:
@@ -614,10 +617,12 @@ def main() -> None:
                         "strength_pred": y_pred_ens,
                     }
                 )
+                pred_df = pred_df.reset_index(drop=True)
+                proba_df = proba_df.reset_index(drop=True)
                 strength_ensemble_pred_rows.append(pd.concat([pred_df, proba_df], axis=1))
 
                 with open(
-                    output_dir / "q1_strength_params_ensemble_proba_mean.json", "w", encoding="utf-8"
+                    output_dir / "pp_strength_params_ensemble_proba_mean.json", "w", encoding="utf-8"
                 ) as f:
                     json.dump(
                         {"ensemble_of": list(strength_probas.keys()), "classes": all_classes},
@@ -675,10 +680,12 @@ def main() -> None:
                                     "strength_pred": y_pred_ens,
                                 }
                             )
+                            pred_df = pred_df.reset_index(drop=True)
+                            proba_df = proba_df.reset_index(drop=True)
                             strength_ensemble_pred_rows.append(pd.concat([pred_df, proba_df], axis=1))
 
                             with open(
-                                output_dir / "q1_strength_params_ensemble_proba_topk_cv_weighted.json",
+                                output_dir / "pp_strength_params_ensemble_proba_topk_cv_weighted.json",
                                 "w",
                                 encoding="utf-8",
                             ) as f:
@@ -700,7 +707,7 @@ def main() -> None:
 
             if strength_ensemble_pred_rows:
                 pd.concat(strength_ensemble_pred_rows, axis=0, ignore_index=True).to_csv(
-                    output_dir / "q1_strength_ensemble_test_predictions.csv", index=False
+                    output_dir / "pp_strength_ensemble_test_predictions.csv", index=False
                 )
 
         strength_metrics_df = pd.DataFrame(strength_rows)
@@ -708,7 +715,7 @@ def main() -> None:
             strength_metrics_df = strength_metrics_df.sort_values(
                 "Strength_F1_macro", ascending=False
             )
-        strength_metrics_df.to_csv(output_dir / "q1_strength_model_metrics.csv", index=False)
+        strength_metrics_df.to_csv(output_dir / "pp_strength_model_metrics.csv", index=False)
 
     # Residual bootstrap for the best-CV regression model (optional)
     if args.bootstrap and args.bootstrap > 0 and regression_preds:
@@ -785,7 +792,7 @@ def main() -> None:
                     **{f"proba_strength__{b}": strength_probs[b] for b in buckets},
                 }
             )
-            out.to_csv(output_dir / "q1_bootstrap_predictions.csv", index=False)
+            out.to_csv(output_dir / "pp_bootstrap_predictions.csv", index=False)
         except Exception as e:
             failures.append(
                 {
@@ -797,7 +804,7 @@ def main() -> None:
             )
 
     if failures:
-        with open(output_dir / "q1_failures.json", "w", encoding="utf-8") as f:
+        with open(output_dir / "pp_failures.json", "w", encoding="utf-8") as f:
             json.dump(failures, f, ensure_ascii=False, indent=2)
 
     print("[OK] wrote metrics to:", output_dir)

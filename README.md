@@ -21,20 +21,20 @@
 
 ## 快速开始
 
-### 1) 生成问题1的月度建模数据集
+### 1) 生成月度建模数据集（问题1/2/3 共用）
 
 默认用“月均价（由日度`平均`聚合）”作为预测目标，可选 `--target-metric last` 改为“月末价”口径。
 
 ```bash
-conda run -n lchen python scripts/build_q1_dataset.py --target-metric mean --output outputs/datasets/q1_long.csv
-conda run -n lchen python scripts/build_q1_dataset.py --target-metric mean --include-futures --output outputs/datasets/q1_with_futures.csv
+conda run -n lchen python scripts/build_pp_dataset.py --target-metric mean --output outputs/datasets/pp_base.csv
+conda run -n lchen python scripts/build_pp_dataset.py --target-metric mean --include-futures --output outputs/datasets/pp_with_futures.csv
 ```
 
 可选：开启额外特征工程（滚动统计/动量/价差/比值等）：
 
 ```bash
-conda run -n lchen python scripts/build_q1_dataset.py --target-metric mean --engineer-features --output outputs/datasets/q1_long_engineered.csv
-conda run -n lchen python scripts/build_q1_dataset.py --target-metric mean --include-futures --engineer-features --output outputs/datasets/q1_with_futures_engineered.csv
+conda run -n lchen python scripts/build_pp_dataset.py --target-metric mean --engineer-features --output outputs/datasets/pp_base_engineered.csv
+conda run -n lchen python scripts/build_pp_dataset.py --target-metric mean --include-futures --engineer-features --output outputs/datasets/pp_with_futures_engineered.csv
 ```
 
 ### 2) 训练/评估（时间序列连续窗口测试）
@@ -42,25 +42,25 @@ conda run -n lchen python scripts/build_q1_dataset.py --target-metric mean --inc
 默认测试窗口：`2021-01` ~ `2021-07`（可用参数修改）。
 
 ```bash
-conda run -n lchen python scripts/run_q1_models.py --dataset outputs/datasets/q1_long.csv
-conda run -n lchen python scripts/run_q1_models.py --dataset outputs/datasets/q1_with_futures.csv --futures-mode restrict
+conda run -n lchen python scripts/run_pp_models.py --dataset outputs/datasets/pp_base.csv
+conda run -n lchen python scripts/run_pp_models.py --dataset outputs/datasets/pp_with_futures.csv --futures-mode restrict
 ```
 
 输出会写入 `outputs/metrics/<dataset_stem>/`：
 
-- `q1_model_metrics.csv`：价格回归 + 方向（并附带由回归派生的“强度分档”指标）
-- `q1_model_cv.csv`：训练集 TimeSeriesSplit 交叉验证（用于选择/加权集成）
-- `q1_test_predictions.csv`：逐月预测（含 `return_pred`、`strength_pred`）
-- `q1_strength_model_metrics.csv`：强度多分类模型指标
-- `q1_strength_model_cv.csv`：强度多分类的训练集 TimeSeriesSplit 交叉验证（用于加权集成）
-- `q1_strength_test_predictions.csv`：强度多分类逐月预测与各档概率（`proba__*`）
-- `q1_strength_ensemble_test_predictions.csv`：强度多分类集成（soft-voting）的逐月概率输出
-- `q1_bootstrap_predictions.csv`：可选 residual bootstrap 区间/概率输出（`--bootstrap N`）
-- `q1_failures.json`：个别模型失败原因（不中断主流程）
+- `pp_model_metrics.csv`：价格回归 + 方向（并附带由回归派生的“强度分档”指标）
+- `pp_model_cv.csv`：训练集 TimeSeriesSplit 交叉验证（用于选择/加权集成）
+- `pp_test_predictions.csv`：逐月预测（含 `return_pred`、`strength_pred`）
+- `pp_strength_model_metrics.csv`：强度多分类模型指标
+- `pp_strength_model_cv.csv`：强度多分类的训练集 TimeSeriesSplit 交叉验证（用于加权集成）
+- `pp_strength_test_predictions.csv`：强度多分类逐月预测与各档概率（`proba__*`）
+- `pp_strength_ensemble_test_predictions.csv`：强度多分类集成（soft-voting）的逐月概率输出
+- `pp_bootstrap_predictions.csv`：可选 residual bootstrap 区间/概率输出（`--bootstrap N`）
+- `pp_failures.json`：个别模型失败原因（不中断主流程）
 
 额外说明：
 
-- 回归集成模型会以 `ensemble_*` 的形式出现在 `q1_model_metrics.csv` / `q1_test_predictions.csv`。
+- 回归集成模型会以 `ensemble_*` 的形式出现在 `pp_model_metrics.csv` / `pp_test_predictions.csv`。
 - 额外加入时间序列模型：`sarimax`（statsmodels）与 `prophet`（可选依赖）。若缺少依赖可安装：`conda run -n lchen python -m pip install prophet`。
 
 ### 2.5) 描述统计与可视化（原始数据 + 整理后数据）
@@ -68,7 +68,7 @@ conda run -n lchen python scripts/run_q1_models.py --dataset outputs/datasets/q1
 一键生成原始 Excel 概览、月度特征覆盖、以及建模数据集的时间序列 EDA 图表与统计表：
 
 ```bash
-conda run -n lchen python scripts/run_q1_eda.py
+conda run -n lchen python scripts/run_pp_eda.py
 ```
 
 输出写入 `outputs/eda/`；实现细节与建议写法见：`特征工程与描述性统计分析.md`。
@@ -78,8 +78,8 @@ conda run -n lchen python scripts/run_q1_eda.py
 基于 PP 月度价格的“趋势/波动”特征做阶段划分，并在每个阶段内用线性模型（Ridge）自动筛选关键因子组（按 `因子名__聚合口径` 的前缀分组），输出各阶段的因子影响权重。
 
 ```bash
-conda run -n lchen python scripts/run_q3_stage_factor_selection.py --dataset outputs/datasets/q1_long.csv
-conda run -n lchen python scripts/run_q3_stage_factor_selection.py --dataset outputs/datasets/q1_with_futures.csv --also-strength
+conda run -n lchen python scripts/run_q3_stage_factor_selection.py --dataset outputs/datasets/pp_base.csv
+conda run -n lchen python scripts/run_q3_stage_factor_selection.py --dataset outputs/datasets/pp_with_futures.csv --also-strength
 ```
 
 输出会写入 `outputs/q3/<dataset_stem>/`：

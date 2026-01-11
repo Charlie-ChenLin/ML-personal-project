@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Model definitions and fit/predict helpers for the PP price project."""
+
 from dataclasses import dataclass
 from typing import Any, Literal
 

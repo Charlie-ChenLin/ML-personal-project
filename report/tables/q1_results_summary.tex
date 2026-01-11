@@ -1,0 +1,19 @@
+% Summary from outputs/metrics/*/pp_model_metrics.csv (test window: 2021-01~2021-07)
+\begin{table}[H]
+\centering
+\caption{问题1：价格点预测与涨跌方向（最佳模型摘要，按 RMSE 选取）}
+\label{tab:q1-summary}
+\small
+\begin{TableFit}
+\begin{tabular}{llllrrrr}
+\toprule
+数据集 & 方案 & 最佳模型 & MAE & RMSE & MAPE(\%) & Acc & Precision/Recall \\
+\midrule
+pp\_\allowbreak base & 不含期货 & ensemble\_\allowbreak cv\_\allowbreak weighted & 192.90 & 220.62 & 2.19 & 0.857 & 0.750 / 1.000 \\
+pp\_\allowbreak base\_\allowbreak engineered & 不含期货+特征工程 & ensemble\_\allowbreak cv\_\allowbreak weighted & 126.33 & 155.81 & 1.46 & 1.000 & 1.000 / 1.000 \\
+pp\_\allowbreak with\_\allowbreak futures & 含期货(restrict) & lasso & 463.86 & 536.11 & 5.30 & 0.571 & 0.500 / 0.667 \\
+pp\_\allowbreak with\_\allowbreak futures\_\allowbreak engineered & 含期货+特征工程(restrict) & ensemble\_\allowbreak topk\_\allowbreak cv\_\allowbreak weighted & 474.06 & 559.79 & 5.37 & 0.571 & 0.500 / 0.333 \\
+\bottomrule
+\end{tabular}
+\end{TableFit}
+\end{table}

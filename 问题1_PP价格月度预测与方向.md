@@ -2,7 +2,7 @@
 
 对应 `2025年个人PJ.docx` 第 1 问：基于 `PP数据/` 的历史相关数据，对 **PP拉丝价格**做**月度预测**，并输出 **未来涨跌方向**（上涨/下跌）。
 
-> 说明：更完整的“特征工程 + 描述性统计 + 可视化”请见：`特征工程与描述性统计分析.md`（脚本：`scripts/run_q1_eda.py`）。
+> 说明：更完整的“特征工程 + 描述性统计 + 可视化”请见：`特征工程与描述性统计分析.md`（脚本：`scripts/run_pp_eda.py`）。
 
 ---
 
@@ -34,7 +34,7 @@
 `PP数据/`（表 1-17，外加表 0 汇总）：
 
 - 预测目标价格：`PP数据/1-华东市场PP粒市场价_法定工作日.xlsx`
-- 上中下游因子：产量/进口/开工率/成本/库存/检修/期货/GDP 等（详见 `pp_forecast/q1_dataset.py:31`）
+- 上中下游因子：产量/进口/开工率/成本/库存/检修/期货/GDP 等（详见 `pp_forecast/dataset.py:1`）
 
 ### 2.2 统一降频到月度
 
@@ -77,9 +77,9 @@
 - Naive：`ŷ_t = y_{t-1}`
 - Seasonal Naive：`ŷ_t = y_{t-12}`（覆盖不足时会自动跳过）
 
-基线结果会写到：`outputs/metrics/<dataset_stem>/q1_baselines.json`。
+基线结果会写到：`outputs/metrics/<dataset_stem>/pp_baselines.json`。
 
-一次运行示例（2021-01~2021-07 测试窗，基于 `q1_long`）：
+一次运行示例（2021-01~2021-07 测试窗，基于 `pp_base`）：
 
 |Baseline|MAE|RMSE|MAPE|方向 Accuracy|Precision|Recall|
 |---|---:|---:|---:|---:|---:|---:|
@@ -88,7 +88,7 @@
 
 ### 4.2 回归模型（预测价格 y）
 
-实现位置：`pp_forecast/q1_models.py:103`
+实现位置：`pp_forecast/models.py:1`
 
 当前提供多种可对比模型（线性/非线性/集成），例如：
 
@@ -98,7 +98,7 @@
 - 距离/核方法：KNNRegressor / SVR(RBF)
 - 时间序列模型（可选依赖）：SARIMAX（statsmodels）/ Prophet（prophet）
 
-每个模型的参数会写到：`outputs/metrics/<dataset_stem>/q1_params_<model>.json`（用于报告“参数设置情况”）。
+每个模型的参数会写到：`outputs/metrics/<dataset_stem>/pp_params_<model>.json`（用于报告“参数设置情况”）。
 
 另外会生成若干集成模型（写报告时可视作“集成学习方案”对比）：
 
@@ -108,7 +108,7 @@
 - `ensemble_cv_weighted`：按训练集 TimeSeriesSplit 的 RMSE 反比加权
 - `ensemble_topk_*`：只用训练集 CV 最优的 Top-k 模型做均值/加权
 
-对应训练集 CV 结果：`outputs/metrics/<dataset_stem>/q1_model_cv.csv`。
+对应训练集 CV 结果：`outputs/metrics/<dataset_stem>/pp_model_cv.csv`。
 
 ### 4.3 可选：额外特征工程（提升表达能力）
 
@@ -118,16 +118,16 @@
 
 ## 5. 结果对比（一次运行示例）
 
-以下为默认测试窗（2021-01~2021-07）的一次结果摘要；完整对比见 `outputs/metrics/<dataset_stem>/q1_model_metrics.csv`。
+以下为默认测试窗（2021-01~2021-07）的一次结果摘要；完整对比见 `outputs/metrics/<dataset_stem>/pp_model_metrics.csv`。
 
 > 注意：`with_futures` 在 `restrict` 模式下会丢弃期货缺失月份，样本显著变短，指标不宜与 long sample 直接“公平”比较，更多用于“纳入期货是否增益”的敏感性分析。
 
 |数据集|说明|最佳模型（按 RMSE）|MAE|RMSE|MAPE|方向 Accuracy|Precision|Recall|
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-|`q1_long`|不含期货|`rf`|223.37|240.43|2.57%|0.86|0.75|1.00|
-|`q1_long_engineered`|不含期货 + 特征工程|`ada`|183.89|215.15|2.09%|1.00|1.00|1.00|
-|`q1_with_futures`|含期货（restrict）|`huber`|395.54|506.92|4.48%|0.57|0.50|0.67|
-|`q1_with_futures_engineered`|含期货 + 特征工程（restrict）|`ada`|235.72|318.91|2.65%|0.86|1.00|0.67|
+|`pp_base`|不含期货|`rf`|223.37|240.43|2.57%|0.86|0.75|1.00|
+|`pp_base_engineered`|不含期货 + 特征工程|`ada`|183.89|215.15|2.09%|1.00|1.00|1.00|
+|`pp_with_futures`|含期货（restrict）|`huber`|395.54|506.92|4.48%|0.57|0.50|0.67|
+|`pp_with_futures_engineered`|含期货 + 特征工程（restrict）|`ada`|235.72|318.91|2.65%|0.86|1.00|0.67|
 
 总体观察（就本次测试窗而言）：
 
@@ -140,14 +140,14 @@
 
 ```bash
 # 1) 构建数据集（默认月均价口径）
-conda run -n lchen python scripts/build_q1_dataset.py --target-metric mean --output outputs/datasets/q1_long.csv
-conda run -n lchen python scripts/build_q1_dataset.py --target-metric mean --include-futures --output outputs/datasets/q1_with_futures.csv
+conda run -n lchen python scripts/build_pp_dataset.py --target-metric mean --output outputs/datasets/pp_base.csv
+conda run -n lchen python scripts/build_pp_dataset.py --target-metric mean --include-futures --output outputs/datasets/pp_with_futures.csv
 
 # 可选：开启额外特征工程
-conda run -n lchen python scripts/build_q1_dataset.py --engineer-features --output outputs/datasets/q1_long_engineered.csv
-conda run -n lchen python scripts/build_q1_dataset.py --include-futures --engineer-features --output outputs/datasets/q1_with_futures_engineered.csv
+conda run -n lchen python scripts/build_pp_dataset.py --engineer-features --output outputs/datasets/pp_base_engineered.csv
+conda run -n lchen python scripts/build_pp_dataset.py --include-futures --engineer-features --output outputs/datasets/pp_with_futures_engineered.csv
 
 # 2) 训练与评估（时间序列测试窗）
-conda run -n lchen python scripts/run_q1_models.py --dataset outputs/datasets/q1_long.csv
-conda run -n lchen python scripts/run_q1_models.py --dataset outputs/datasets/q1_with_futures.csv --futures-mode restrict
+conda run -n lchen python scripts/run_pp_models.py --dataset outputs/datasets/pp_base.csv
+conda run -n lchen python scripts/run_pp_models.py --dataset outputs/datasets/pp_with_futures.csv --futures-mode restrict
 ```

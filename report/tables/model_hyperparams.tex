@@ -1,0 +1,38 @@
+% Key hyper-parameters (from pp_forecast/models.py and pp_forecast/ts_models.py)
+\begin{table}[H]
+\centering
+\caption{主要模型与参数设置（节选）}
+\label{tab:model-hparams}
+\small
+\begin{TableFit}
+\begin{tabular}{ll}
+\toprule
+模型 & 关键参数 \\
+\midrule
+Ridge & $\alpha=1.0$ \\
+Lasso & $\alpha=0.001$，max\_iter=20000 \\
+ElasticNet & $\alpha=0.001$，l1\_ratio=0.5，max\_iter=20000 \\
+BayesianRidge & 默认参数 \\
+HuberRegressor & max\_iter=2000，$\epsilon=1.35$，$\alpha=1e-4$ \\
+KNNRegressor & n\_neighbors=8，weights=distance \\
+SVR(RBF) & $C=10$，$\gamma=$scale，$\epsilon=0.1$ \\
+RandomForestRegressor & n\_estimators=500，max\_depth=6，min\_samples\_leaf=2 \\
+ExtraTreesRegressor & n\_estimators=1000，max\_depth=8，min\_samples\_leaf=2 \\
+GBR & learning\_rate=0.05，n\_estimators=500，max\_depth=3 \\
+AdaBoostRegressor & n\_estimators=500，learning\_rate=0.05 \\
+Bagging(Tree) & n\_estimators=300，bootstrap=True，base\_tree\_depth=4 \\
+\midrule
+LogisticRegression(强度) & max\_iter=2000 \\
+SVC(RBF, 强度) & $C=5$，$\gamma=$scale，probability=True \\
+RandomForestClassifier(强度) & n\_estimators=500，max\_depth=6，min\_samples\_leaf=2 \\
+ExtraTreesClassifier(强度) & n\_estimators=1000，max\_depth=8，min\_samples\_leaf=2 \\
+GBR\_clf(强度) & learning\_rate=0.05，n\_estimators=500，max\_depth=3 \\
+AdaBoostClassifier(强度) & n\_estimators=500，learning\_rate=0.05 \\
+Bagging(Tree, 强度) & n\_estimators=300，bootstrap=True，base\_tree\_depth=4 \\
+\midrule
+SARIMAX(可选) & order=(1,1,1)，季节项(1,0,1,12)(样本足够时启用)，外生变量取 Top-20 相关特征 \\
+Prophet(可选) & yearly\_seasonality=True，additive；外生回归量取 Top-10 相关特征 \\
+\bottomrule
+\end{tabular}
+\end{TableFit}
+\end{table}

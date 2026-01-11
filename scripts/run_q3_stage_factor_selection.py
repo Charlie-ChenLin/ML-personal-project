@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import sys
@@ -40,7 +41,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ridge-alpha", type=float, default=1.0)
     p.add_argument("--top-k", type=int, default=6, help="Top-K factor groups per stage.")
     p.add_argument("--top-features-per-group", type=int, default=5)
-    p.add_argument("--min-stage-samples", type=int, default=8, help="Skip stages shorter than this after filtering.")
+    p.add_argument(
+        "--min-stage-samples",
+        type=int,
+        default=6,
+        help="Skip stages shorter than this after filtering.",
+    )
 
     p.add_argument("--include-own-price", action="store_true", help="Include PP价格 group in selection.")
     p.add_argument("--include-calendar", action="store_true", help="Include Calendar features in selection.")
@@ -53,12 +59,48 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def _ensure_mpl() -> None:
+    os.environ.setdefault("MPLCONFIGDIR", str((REPO_ROOT / ".mplconfig").resolve()))
+
+
+def _configure_matplotlib_fonts() -> None:
+    import matplotlib.pyplot as plt
+    from matplotlib import font_manager
+
+    candidates = [
+        "Arial Unicode MS",  # macOS often has this
+        "STHeiti",
+        "Songti SC",
+        "PingFang SC",
+        "SimHei",
+        "Noto Sans CJK SC",
+        "DejaVu Sans",
+    ]
+    available = {f.name for f in font_manager.fontManager.ttflist}
+    chosen = None
+    for name in candidates:
+        if name in available:
+            chosen = name
+            break
+
+    if chosen is not None:
+        plt.rcParams["font.family"] = ["sans-serif"]
+        fallback = ["DejaVu Sans"]
+        plt.rcParams["font.sans-serif"] = [chosen] + [f for f in fallback if f != chosen]
+
+    plt.rcParams["axes.unicode_minus"] = False
+    plt.rcParams["pdf.fonttype"] = 42
+    plt.rcParams["ps.fonttype"] = 42
+
+
 def _try_plot_price_stages(df: pd.DataFrame, *, output_dir: Path) -> None:
+    _ensure_mpl()
     try:
         import matplotlib.pyplot as plt
     except Exception:
         return
 
+    _configure_matplotlib_fonts()
     if "month" not in df.columns or "y" not in df.columns or "stage_id" not in df.columns:
         return
 
@@ -77,11 +119,11 @@ def _try_plot_price_stages(df: pd.DataFrame, *, output_dir: Path) -> None:
         for i in change_idx[1:]:
             ax.axvline(x.iloc[i], color="grey", alpha=0.3, linewidth=1.0)
 
-        ax.set_title("PP monthly price with stage boundaries (Q3)")
-        ax.set_xlabel("Month")
-        ax.set_ylabel("Price")
+        ax.set_title("PP 月度价格与阶段边界（问题3）")
+        ax.set_xlabel("月份")
+        ax.set_ylabel("价格")
         fig.tight_layout()
-        fig.savefig(output_dir / "q3_stages_price.png", dpi=200)
+        fig.savefig(output_dir / "q3_stages_price.pdf")
         plt.close(fig)
     except Exception:
         return
@@ -142,7 +184,10 @@ def main() -> None:
     for stage_id, g in df.groupby("stage_id", sort=True):
         g = g.sort_values("month").reset_index(drop=True)
         if not args.keep_cross_boundary and int(stage_id) != int(df["stage_id"].min()):
-            g = g.iloc[1:].reset_index(drop=True)
+            # The first month of a stage uses features from previous month; drop it only if we still
+            # have enough samples in this stage for fitting.
+            if len(g) - 1 >= args.min_stage_samples:
+                g = g.iloc[1:].reset_index(drop=True)
 
         if len(g) < args.min_stage_samples:
             failures.append(
