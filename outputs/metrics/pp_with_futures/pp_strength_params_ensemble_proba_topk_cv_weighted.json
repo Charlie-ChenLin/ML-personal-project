@@ -1,0 +1,16 @@
+{
+  "ensemble_of": [
+    "logreg",
+    "svc_rbf",
+    "extra_trees_clf",
+    "nb",
+    "rf_clf"
+  ],
+  "weights": {
+    "logreg": 0.3333333333333333,
+    "svc_rbf": 0.3333333333333333,
+    "extra_trees_clf": 0.3333333333333333,
+    "nb": 0.0,
+    "rf_clf": 0.0
+  }
+}

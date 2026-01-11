@@ -1,0 +1,26 @@
+{
+  "naive": {
+    "MAE": 325.7519830066415,
+    "RMSE": 372.2013212110334,
+    "MAPE": 0.037035783033648,
+    "Accuracy": 0.5714285714285714,
+    "Precision": 0.0,
+    "Recall": 0.0,
+    "Strength_Accuracy": 0.0,
+    "Strength_Precision_macro": 0.0,
+    "Strength_Recall_macro": 0.0,
+    "Strength_F1_macro": 0.0
+  },
+  "seasonal_12": {
+    "MAE": 1336.2039302094877,
+    "RMSE": 1489.5078590214362,
+    "MAPE": 0.15108866961560666,
+    "Accuracy": 0.5714285714285714,
+    "Precision": 0.0,
+    "Recall": 0.0,
+    "Strength_Accuracy": 0.0,
+    "Strength_Precision_macro": 0.0,
+    "Strength_Recall_macro": 0.0,
+    "Strength_F1_macro": 0.0
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "alpha_1": 1e-06,
+  "alpha_2": 1e-06,
+  "alpha_init": null,
+  "compute_score": false,
+  "copy_X": true,
+  "fit_intercept": true,
+  "lambda_1": 1e-06,
+  "lambda_2": 1e-06,
+  "lambda_init": null,
+  "max_iter": 300,
+  "tol": 0.001,
+  "verbose": false
+}

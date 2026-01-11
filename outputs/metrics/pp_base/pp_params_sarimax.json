@@ -1,0 +1,44 @@
+{
+  "type": "sarimax",
+  "order": [
+    1,
+    1,
+    1
+  ],
+  "seasonal_order": [
+    1,
+    0,
+    1,
+    12
+  ],
+  "aic": 847.4714051104861,
+  "bic": 898.5476868063498,
+  "features": [
+    "PP价格__last",
+    "PP价格__mean",
+    "丙烯成本__mean",
+    "PP价格__min",
+    "丙烯成本__last",
+    "丙烯成本__max",
+    "丙烯成本__min",
+    "PP价格__max",
+    "MTO成本__mean",
+    "MTO成本__max",
+    "MTO成本__last",
+    "MTO成本__min",
+    "GDP__mean",
+    "GDP__min",
+    "GDP__max",
+    "GDP__last",
+    "乙烯成本__last",
+    "乙烯成本__mean",
+    "乙烯成本__min",
+    "乙烯成本__max"
+  ],
+  "imputer": {
+    "strategy": "median"
+  },
+  "scaler": {
+    "type": "StandardScaler"
+  }
+}

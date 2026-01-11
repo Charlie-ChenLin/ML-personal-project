@@ -1,0 +1,16 @@
+{
+  "ensemble_of": [
+    "ridge",
+    "lasso",
+    "elasticnet",
+    "bayes_ridge",
+    "huber",
+    "knn",
+    "svr_rbf",
+    "rf",
+    "extra_trees",
+    "gbr",
+    "ada",
+    "bagging_tree"
+  ]
+}

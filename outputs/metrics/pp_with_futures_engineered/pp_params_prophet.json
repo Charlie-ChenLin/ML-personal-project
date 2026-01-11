@@ -1,0 +1,22 @@
+{
+  "type": "prophet",
+  "regressors": [
+    "期货价格__mean_mom_12",
+    "cal_month",
+    "丙烯成本__mean_roll_std_6",
+    "塑编开工率__range",
+    "塑编开工率__max_minus_min",
+    "PP开工率__mean_roll_mean_3",
+    "PP开工率__min",
+    "塑编开工率__range_over_mean",
+    "PP开工率__max_minus_min",
+    "PP开工率__range"
+  ],
+  "seasonality_mode": "additive",
+  "yearly_seasonality": true,
+  "weekly_seasonality": false,
+  "daily_seasonality": false,
+  "imputer": {
+    "strategy": "median"
+  }
+}

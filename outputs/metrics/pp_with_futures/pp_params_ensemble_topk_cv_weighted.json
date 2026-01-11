@@ -1,0 +1,9 @@
+{
+  "ensemble_of": [
+    "ridge",
+    "lasso",
+    "bayes_ridge",
+    "huber",
+    "elasticnet"
+  ]
+}

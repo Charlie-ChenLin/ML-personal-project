@@ -1,0 +1,22 @@
+{
+  "type": "prophet",
+  "regressors": [
+    "PP价格__last",
+    "PP价格__mean",
+    "丙烯成本__mean",
+    "PP价格__min",
+    "丙烯成本__last",
+    "丙烯成本__max",
+    "丙烯成本__min",
+    "PP价格__max",
+    "GDP__mean",
+    "GDP__min"
+  ],
+  "seasonality_mode": "additive",
+  "yearly_seasonality": true,
+  "weekly_seasonality": false,
+  "daily_seasonality": false,
+  "imputer": {
+    "strategy": "median"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "ensemble_of": [
+    "knn_clf",
+    "gbr_clf",
+    "svc_rbf",
+    "logreg",
+    "ada_clf"
+  ],
+  "weights": {
+    "knn_clf": 0.2721017514595496,
+    "gbr_clf": 0.22685571309424518,
+    "svc_rbf": 0.2086113427856547,
+    "logreg": 0.1501251042535446,
+    "ada_clf": 0.14230608840700584
+  }
+}

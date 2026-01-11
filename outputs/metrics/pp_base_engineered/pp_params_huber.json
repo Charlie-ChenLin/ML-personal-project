@@ -1,0 +1,8 @@
+{
+  "alpha": 0.0001,
+  "epsilon": 1.35,
+  "fit_intercept": true,
+  "max_iter": 2000,
+  "tol": 1e-05,
+  "warm_start": false
+}

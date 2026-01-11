@@ -1,0 +1,9 @@
+model,cv_n_splits,cv_test_size,cv_Strength_F1_macro_mean,cv_Strength_F1_macro_std
+logreg,3,2,0.1111111111111111,0.15713484026367722
+svc_rbf,3,2,0.1111111111111111,0.15713484026367722
+extra_trees_clf,3,2,0.1111111111111111,0.15713484026367722
+nb,3,2,0.0,0.0
+rf_clf,3,2,0.0,0.0
+gbr_clf,3,2,0.0,0.0
+ada_clf,3,2,0.0,0.0
+bagging_tree_clf,3,2,0.0,0.0

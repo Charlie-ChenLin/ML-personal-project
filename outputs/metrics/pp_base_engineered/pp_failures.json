@@ -1,0 +1,8 @@
+[
+  {
+    "task": "ts_price_regression",
+    "model": "prophet",
+    "error_type": "ImportError",
+    "error": "prophet is required; install prophet in your environment."
+  }
+]

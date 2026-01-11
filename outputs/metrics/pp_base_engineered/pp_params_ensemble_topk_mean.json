@@ -1,0 +1,9 @@
+{
+  "ensemble_of": [
+    "extra_trees",
+    "bagging_tree",
+    "rf",
+    "gbr",
+    "bayes_ridge"
+  ]
+}

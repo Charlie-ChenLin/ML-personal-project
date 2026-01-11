@@ -1,0 +1,8 @@
+[
+  {
+    "task": "stage_skip",
+    "stage_id": "2",
+    "error_type": "TooShort",
+    "error": "len=5 < min_stage_samples=8"
+  }
+]

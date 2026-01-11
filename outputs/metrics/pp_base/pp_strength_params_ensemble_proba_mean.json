@@ -1,0 +1,20 @@
+{
+  "ensemble_of": [
+    "logreg",
+    "knn_clf",
+    "nb",
+    "svc_rbf",
+    "rf_clf",
+    "extra_trees_clf",
+    "gbr_clf",
+    "ada_clf",
+    "bagging_tree_clf"
+  ],
+  "classes": [
+    "big_down",
+    "big_up",
+    "flat",
+    "small_down",
+    "small_up"
+  ]
+}

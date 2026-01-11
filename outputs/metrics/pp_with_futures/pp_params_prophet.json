@@ -1,0 +1,22 @@
+{
+  "type": "prophet",
+  "regressors": [
+    "cal_month",
+    "塑编开工率__range",
+    "PP开工率__min",
+    "PP开工率__range",
+    "PP价格__mean",
+    "PP价格__last",
+    "PP开工率__mean",
+    "BOPP开工率__min",
+    "BOPP开工率__mean",
+    "BOPP开工率__last"
+  ],
+  "seasonality_mode": "additive",
+  "yearly_seasonality": true,
+  "weekly_seasonality": false,
+  "daily_seasonality": false,
+  "imputer": {
+    "strategy": "median"
+  }
+}

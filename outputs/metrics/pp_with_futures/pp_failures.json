@@ -1,0 +1,14 @@
+[
+  {
+    "task": "ts_price_regression",
+    "model": "prophet",
+    "error_type": "ImportError",
+    "error": "prophet is required; install prophet in your environment."
+  },
+  {
+    "task": "cv_strength_classification",
+    "model": "knn_clf",
+    "error_type": "ValueError",
+    "error": "Expected n_neighbors <= n_samples_fit, but n_neighbors = 10, n_samples_fit = 8, n_samples = 2"
+  }
+]

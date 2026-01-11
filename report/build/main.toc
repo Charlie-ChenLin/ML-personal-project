@@ -1,0 +1,56 @@
+\contentsline {section}{\numberline {1}问题背景与任务定义}{3}{section.1}%
+\contentsline {paragraph}{符号约定与预测口径（避免信息泄露）}{3}{paragraph*.3}%
+\contentsline {section}{\numberline {2}数据说明与预处理}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}原始数据构成与业务维度}{3}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}覆盖差异与频率识别}{4}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}统一月度化：周/日/年 $\rightarrow $ 月}{4}{subsection.2.3}%
+\contentsline {subsection}{\numberline {2.4}时序对齐：$x(t-1)\rightarrow y(t)$ 与信息滞后}{4}{subsection.2.4}%
+\contentsline {subsection}{\numberline {2.5}目标变量与标签构造（问题1/2共用）}{5}{subsection.2.5}%
+\contentsline {subsection}{\numberline {2.6}涨跌强度分档（问题2）}{5}{subsection.2.6}%
+\contentsline {subsection}{\numberline {2.7}缺失处理、标准化与可复现流水线}{5}{subsection.2.7}%
+\contentsline {subsection}{\numberline {2.8}数据集版本与输出文件}{5}{subsection.2.8}%
+\contentsline {section}{\numberline {3}特征工程与描述性统计（时间序列EDA）}{6}{section.3}%
+\contentsline {subsection}{\numberline {3.1}原始数据概览}{6}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}月度特征覆盖与缺失}{11}{subsection.3.2}%
+\contentsline {paragraph}{数据口径与“覆盖”的定义}{11}{paragraph*.14}%
+\contentsline {paragraph}{建模窗口}{11}{paragraph*.15}%
+\contentsline {paragraph}{如何读图}{11}{paragraph*.17}%
+\contentsline {paragraph}{关键结论（对建模的影响）}{12}{paragraph*.18}%
+\contentsline {subsection}{\numberline {3.3}平稳性检验与变换建议}{12}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}因子共线性与信息冗余}{13}{subsection.3.4}%
+\contentsline {subsection}{\numberline {3.5}关系稳定性：滚动滞后相关}{14}{subsection.3.5}%
+\contentsline {subsection}{\numberline {3.6}建模数据集（pp\_base）EDA}{15}{subsection.3.6}%
+\contentsline {paragraph}{样本窗口与目标分布}{15}{paragraph*.23}%
+\contentsline {paragraph}{季节性、趋势与自相关}{16}{paragraph*.26}%
+\contentsline {paragraph}{缺失结构与“结构性缺失”}{17}{paragraph*.29}%
+\contentsline {paragraph}{与目标的相关性：水平值 vs 变化值}{17}{paragraph*.31}%
+\contentsline {subsection}{\numberline {3.7}派生特征工程（可选开关）}{19}{subsection.3.7}%
+\contentsline {paragraph}{设计原则（只用过去信息）}{19}{paragraph*.33}%
+\contentsline {paragraph}{派生特征族（与后续建模强相关）}{19}{paragraph*.34}%
+\contentsline {paragraph}{对建模的直接收益}{19}{paragraph*.36}%
+\contentsline {section}{\numberline {4}问题1：PP价格月度预测与涨跌方向}{19}{section.4}%
+\contentsline {subsection}{\numberline {4.1}问题设定与评价设计}{19}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}基线模型（必须项）与可解释对照}{20}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}特征集与模型族}{20}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}集成学习与模型选择策略}{21}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}结果、可视化与误差分析}{21}{subsection.4.5}%
+\contentsline {paragraph}{关键讨论}{22}{paragraph*.41}%
+\contentsline {section}{\numberline {5}问题2：涨跌强度预测与概率输出}{22}{section.5}%
+\contentsline {subsection}{\numberline {5.1}任务设定与难点}{22}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}两条建模路径（数值 vs 概率）}{22}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}评价指标与概率输出口径}{23}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}结果摘要与可视化解释}{23}{subsection.5.4}%
+\contentsline {paragraph}{概率输出文件与业务解读}{23}{paragraph*.44}%
+\contentsline {section}{\numberline {6}问题3：分阶段关键因子筛选与权重}{24}{section.6}%
+\contentsline {subsection}{\numberline {6.1}动机：因子作用的阶段性}{24}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}阶段划分方法（趋势 $\times $ 波动）}{24}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}阶段内关键因子组自动筛选与权重计算}{24}{subsection.6.3}%
+\contentsline {paragraph}{阶段性结论与业务解释}{26}{paragraph*.51}%
+\contentsline {section}{\numberline {7}总结：不足与展望}{26}{section.7}%
+\contentsline {section}{附录目录}{27}{section*.52}%
+\contentsline {section}{\numberline {A}附录A：可复现代码结构与运行命令}{27}{appendix.A}%
+\contentsline {section}{\numberline {B}附录B：主要输出文件说明}{27}{appendix.B}%
+\contentsline {section}{\numberline {C}附录C：完整模型对比表（CSV 路径）}{27}{appendix.C}%
+\contentsline {subsection}{\numberline {C.1}问题1：全模型对比（回归/方向）}{27}{subsection.C.1}%
+\contentsline {subsection}{\numberline {C.2}问题2：全模型对比（强度五分类）}{32}{subsection.C.2}%
+\contentsline {paragraph}{CSV 输出路径（可复现与二次分析）}{33}{paragraph*.53}%

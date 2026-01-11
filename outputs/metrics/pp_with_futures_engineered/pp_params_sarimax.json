@@ -1,0 +1,44 @@
+{
+  "type": "sarimax",
+  "order": [
+    1,
+    1,
+    1
+  ],
+  "seasonal_order": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "aic": -167.21427527775916,
+  "bic": -158.06268400339664,
+  "features": [
+    "期货价格__mean_mom_12",
+    "cal_month",
+    "GDP__mean_roll_std_6",
+    "丙烯成本__mean_roll_std_6",
+    "塑编开工率__range",
+    "塑编开工率__max_minus_min",
+    "PP开工率__mean_roll_mean_3",
+    "PP开工率__min",
+    "塑编开工率__range_over_mean",
+    "PP开工率__max_minus_min",
+    "PP开工率__range",
+    "PP价格__mean",
+    "BOPP开工率__mean_roll_std_3",
+    "PP开工率__range_over_mean",
+    "PP价格__last",
+    "PP价格__mean_roll_std_3",
+    "PP开工率__mean",
+    "PDH成本__mean_roll_mean_6",
+    "cal_month_sin",
+    "BOPP开工率__last"
+  ],
+  "imputer": {
+    "strategy": "median"
+  },
+  "scaler": {
+    "type": "StandardScaler"
+  }
+}

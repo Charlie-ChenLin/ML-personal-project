@@ -1,0 +1,7 @@
+{
+  "algorithm": "SAMME.R",
+  "estimator": null,
+  "learning_rate": 0.05,
+  "n_estimators": 500,
+  "random_state": 42
+}

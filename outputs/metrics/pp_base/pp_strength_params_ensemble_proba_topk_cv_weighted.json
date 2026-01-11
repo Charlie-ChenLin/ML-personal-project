@@ -1,0 +1,16 @@
+{
+  "ensemble_of": [
+    "ada_clf",
+    "knn_clf",
+    "gbr_clf",
+    "bagging_tree_clf",
+    "nb"
+  ],
+  "weights": {
+    "ada_clf": 0.34718569174118885,
+    "knn_clf": 0.2025249868490268,
+    "gbr_clf": 0.17727511835875856,
+    "bagging_tree_clf": 0.1546554445028932,
+    "nb": 0.11835875854813256
+  }
+}
